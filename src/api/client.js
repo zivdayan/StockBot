@@ -27,6 +27,9 @@ export const getPrices = (tickers) =>
 export const importPortfolio = (content, mode = 'replace') =>
   request('/import-portfolio', { method: 'POST', body: JSON.stringify({ content, mode }) })
 
+// Telegram
+export const getTelegramChats = () => request('/telegram-chats')
+
 // Settings
 export const getSettings = () => request('/settings')
 export const saveSettings = (settings) =>
