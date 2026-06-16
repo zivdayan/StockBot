@@ -1,9 +1,85 @@
-/**
- * GET /api/prices?tickers=AMZN,GOOG
- *
- * Fetches quotes directly from Yahoo Finance v8 API.
- * Returns bid, ask, last, change, changePercent, previousClose per ticker.
- */
+import { getStore } from '@netlify/blobs'
+
+const STORE_NAME  = 'stockbot'
+const CRUMB_KEY   = 'yahoo-crumb'
+const CRUMB_TTL   = 50 * 60 * 1000   // 50 min (crumb valid ~1 h)
+
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
+
+// ── Session / crumb management ────────────────────────────────────────────────
+
+async function getSession(store) {
+  const cached = await store.get(CRUMB_KEY)
+  if (cached) {
+    const s = JSON.parse(cached)
+    if (Date.now() - s.fetchedAt < CRUMB_TTL) return s
+  }
+  const s = await fetchSession()
+  await store.set(CRUMB_KEY, JSON.stringify({ ...s, fetchedAt: Date.now() }))
+  return s
+}
+
+async function fetchSession() {
+  // Step 1 — get an A1 cookie from Yahoo's cookie endpoint
+  const cookieRes = await fetch('https://fc.yahoo.com/v1/test/acookie', {
+    headers: { 'User-Agent': UA },
+    redirect: 'follow',
+  })
+  const setCookie = cookieRes.headers.get('set-cookie') ?? ''
+  // Pull out just "A1=..." (first segment before semicolon)
+  const cookie = setCookie.split(';')[0] ?? ''
+
+  // Step 2 — exchange cookie for a crumb
+  const crumbRes = await fetch('https://query1.finance.yahoo.com/v1/test/getcrumb', {
+    headers: { 'User-Agent': UA, 'Cookie': cookie },
+  })
+  const crumb = (await crumbRes.text()).trim()
+
+  if (!crumb || crumb.includes('<')) {
+    throw new Error('Failed to obtain Yahoo Finance crumb — the session cookie may be invalid')
+  }
+
+  return { crumb, cookie }
+}
+
+// ── Quote fetch ───────────────────────────────────────────────────────────────
+
+async function fetchQuotes(symbols, session) {
+  const fields = [
+    'symbol', 'shortName',
+    'regularMarketPrice', 'regularMarketChange', 'regularMarketChangePercent',
+    'regularMarketPreviousClose', 'regularMarketOpen',
+    'regularMarketDayHigh', 'regularMarketDayLow',
+    'bid', 'ask', 'marketState',
+  ].join(',')
+
+  const url =
+    `https://query1.finance.yahoo.com/v8/finance/quote` +
+    `?symbols=${encodeURIComponent(symbols)}` +
+    `&fields=${fields}` +
+    `&crumb=${encodeURIComponent(session.crumb)}` +
+    `&lang=en-US&region=US`
+
+  const res = await fetch(url, {
+    headers: {
+      'User-Agent': UA,
+      'Cookie': session.cookie,
+      'Accept': 'application/json',
+      'Accept-Language': 'en-US,en;q=0.9',
+    },
+  })
+
+  if (!res.ok) {
+    const body = await res.text()
+    throw new Error(`Yahoo Finance ${res.status}: ${body.slice(0, 120)}`)
+  }
+
+  const data = await res.json()
+  return data?.quoteResponse?.result ?? []
+}
+
+// ── Handler ───────────────────────────────────────────────────────────────────
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -16,113 +92,53 @@ export default async function handler(req) {
   }
   if (req.method !== 'GET') return json({ error: 'Method not allowed' }, 405)
 
-  const url = new URL(req.url)
-  const raw = url.searchParams.get('tickers')
+  const url     = new URL(req.url)
+  const raw     = url.searchParams.get('tickers')
   if (!raw) return json({ error: 'tickers param required' }, 400)
 
   const tickers = raw.split(',').map(t => t.trim().toUpperCase()).filter(Boolean)
   if (!tickers.length) return json({ error: 'No valid tickers' }, 400)
 
-  const symbols = tickers.join(',')
-  const fields = [
-    'symbol', 'shortName', 'regularMarketPrice', 'regularMarketChange',
-    'regularMarketChangePercent', 'regularMarketPreviousClose',
-    'bid', 'ask', 'regularMarketOpen', 'regularMarketDayHigh',
-    'regularMarketDayLow', 'regularMarketVolume', 'marketState',
-  ].join(',')
+  const store = getStore(STORE_NAME)
 
-  const endpoint =
-    `https://query1.finance.yahoo.com/v8/finance/quote?symbols=${encodeURIComponent(symbols)}&fields=${fields}&lang=en-US&region=US`
-
+  let quotes
   try {
-    const res = await fetch(endpoint, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept': 'application/json',
-        'Accept-Language': 'en-US,en;q=0.9',
-        'Origin': 'https://finance.yahoo.com',
-        'Referer': 'https://finance.yahoo.com/',
-      },
-    })
-
-    if (!res.ok) {
-      const text = await res.text()
-      return json({ error: `Yahoo Finance returned ${res.status}: ${text.slice(0, 200)}` }, 502)
-    }
-
-    const data = await res.json()
-    const quotes = data?.quoteResponse?.result ?? []
-
-    if (!quotes.length) {
-      // Try fallback endpoint
-      return fallback(tickers)
-    }
-
-    const results = {}
-    for (const q of quotes) {
-      results[q.symbol] = {
-        ticker: q.symbol,
-        name: q.shortName ?? q.symbol,
-        currentPrice: q.regularMarketPrice ?? null,
-        change: q.regularMarketChange ?? null,
-        changePercent: q.regularMarketChangePercent ?? null,
-        previousClose: q.regularMarketPreviousClose ?? null,
-        bid: q.bid ?? null,
-        ask: q.ask ?? null,
-        open: q.regularMarketOpen ?? null,
-        high: q.regularMarketDayHigh ?? null,
-        low: q.regularMarketDayLow ?? null,
-        marketState: q.marketState ?? null,  // 'REGULAR' | 'PRE' | 'POST' | 'CLOSED'
-      }
-    }
-
-    // Fill in nulls for tickers not returned
-    for (const t of tickers) {
-      if (!results[t]) results[t] = { ticker: t, currentPrice: null, error: 'Not found' }
-    }
-
-    return json(results)
+    const session = await getSession(store)
+    quotes = await fetchQuotes(tickers.join(','), session)
   } catch (err) {
-    return json({ error: err.message }, 500)
+    // Crumb may have expired — force a fresh session and retry once
+    try {
+      const session = await fetchSession()
+      await store.set(CRUMB_KEY, JSON.stringify({ ...session, fetchedAt: Date.now() }))
+      quotes = await fetchQuotes(tickers.join(','), session)
+    } catch (err2) {
+      return json({ error: err2.message }, 502)
+    }
   }
-}
 
-async function fallback(tickers) {
-  // query2 as fallback
-  const symbols = tickers.join(',')
-  try {
-    const res = await fetch(
-      `https://query2.finance.yahoo.com/v8/finance/quote?symbols=${encodeURIComponent(symbols)}`,
-      {
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Accept': 'application/json',
-        },
-      }
-    )
-    const data = await res.json()
-    const quotes = data?.quoteResponse?.result ?? []
-    const results = {}
-    for (const q of quotes) {
-      results[q.symbol] = {
-        ticker: q.symbol,
-        name: q.shortName ?? q.symbol,
-        currentPrice: q.regularMarketPrice ?? null,
-        change: q.regularMarketChange ?? null,
-        changePercent: q.regularMarketChangePercent ?? null,
-        previousClose: q.regularMarketPreviousClose ?? null,
-        bid: q.bid ?? null,
-        ask: q.ask ?? null,
-        marketState: q.marketState ?? null,
-      }
+  const results = {}
+  for (const q of quotes) {
+    results[q.symbol] = {
+      ticker:        q.symbol,
+      name:          q.shortName ?? q.symbol,
+      currentPrice:  q.regularMarketPrice ?? null,
+      change:        q.regularMarketChange ?? null,
+      changePercent: q.regularMarketChangePercent ?? null,
+      previousClose: q.regularMarketPreviousClose ?? null,
+      bid:           q.bid ?? null,
+      ask:           q.ask ?? null,
+      open:          q.regularMarketOpen ?? null,
+      high:          q.regularMarketDayHigh ?? null,
+      low:           q.regularMarketDayLow ?? null,
+      marketState:   q.marketState ?? null,
     }
-    for (const t of tickers) {
-      if (!results[t]) results[t] = { ticker: t, currentPrice: null, error: 'Not found' }
-    }
-    return json(results)
-  } catch (err) {
-    return json({ error: `Fallback failed: ${err.message}` }, 500)
   }
+
+  for (const t of tickers) {
+    if (!results[t]) results[t] = { ticker: t, currentPrice: null, error: 'Not found' }
+  }
+
+  return json(results)
 }
 
 function json(body, status = 200) {
