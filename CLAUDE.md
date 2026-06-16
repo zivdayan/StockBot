@@ -33,15 +33,20 @@ A personal stock portfolio tracker with real-time Yahoo Finance data, Telegram a
 /
 ├── .github/workflows/
 │   ├── deploy.yml              ← CI: build → set env vars → deploy to Netlify
-│   └── check-alerts.yml        ← Hourly cron: POST /api/check-alerts
+│   ├── check-alerts.yml        ← Hourly cron: POST /api/check-alerts
+│   └── brief.yml               ← Pre-market cron (~07:30 ET): POST /api/brief
 ├── netlify.toml                ← Build config + /api/* redirect to functions
 ├── vite.config.js
 ├── package.json                ← No yahoo-finance2 dep (uses direct fetch)
 │
+├── netlify/lib/                ← Shared modules bundled into functions
+│   ├── quotes.js               ← fetchQuotes() direct Yahoo chart fetch (after-hours aware)
+│   └── telegram.js             ← sendTelegram() returns per-recipient delivery results
 ├── netlify/functions/          ← Serverless API (Netlify Functions v2)
 │   ├── portfolio.js            ← GET/POST/DELETE /api/portfolio (Blobs key: "portfolio")
-│   ├── prices.js               ← GET /api/prices?tickers=... (Yahoo Finance chart API)
-│   ├── check-alerts.js         ← POST /api/check-alerts (alert logic + Telegram sender)
+│   ├── prices.js               ← GET /api/prices?tickers=... (wraps lib/quotes.js)
+│   ├── check-alerts.js         ← POST /api/check-alerts (alert logic; regular-session prices)
+│   ├── brief.js                ← POST /api/brief (instant portfolio briefing → Telegram)
 │   ├── settings.js             ← GET/POST /api/settings (thresholds, recipients)
 │   ├── import-portfolio.js     ← POST /api/import-portfolio (parse broker TSV export)
 │   └── telegram-chats.js       ← GET /api/telegram-chats (live bot chat list from getUpdates)
@@ -154,8 +159,11 @@ Each record spans **several physical lines** (the broker splits the Last/Change 
 | Per-stock alert | Any stock moves ±X% since last hourly snapshot |
 | Portfolio alert | Total value moves ±X% since last snapshot |
 | Daily P&L summary | Sent once at configured UTC hour (checks `dailySummarySentDate` to avoid dupes) |
+| Brief | On demand ("Trigger Brief" button) or pre-market cron — totals, positions, top movers |
 
-Alerts are sent to all `telegramRecipients` via `POST /api/check-alerts`, authenticated by `x-alert-token` header matching `ALERT_SECRET`.
+Alerts (`POST /api/check-alerts`) are sent to all `telegramRecipients`, authenticated by `x-alert-token` matching `ALERT_SECRET`, and use **regular-session prices** (after-hours moves don't trigger alerts). The brief (`POST /api/brief`) is **unauthenticated** (only ever sends to the saved recipients) so the browser button can call it; it uses the **after-hours display price**. Both share `lib/telegram.js`, which returns per-recipient delivery results for verification.
+
+> **Note:** `check-alerts.js` previously imported `yahoo-finance2` (never a dependency), which crashed the function (HTTP 502) and silently broke the hourly cron. It now uses `lib/quotes.js` (direct fetch).
 
 ---
 
@@ -205,7 +213,7 @@ Every push to `main` also triggers GitHub Actions deploy (`.github/workflows/dep
 
 - [x] **Today G/L formula**: now matches the broker via `today_ref` captured at import (see "Today G/L formula" above). Re-import the `.xls` each session to refresh.
 - [x] **GOOG quantity**: resolved — portfolio now holds 9 shares (matches broker).
-- [ ] The hourly GitHub Actions cron (`check-alerts.yml`) needs `TELEGRAM_BOT_TOKEN` set in Netlify env. Trigger a deploy from GitHub Actions to push secrets.
+- [x] Hourly cron was failing (HTTP 502) because `check-alerts.js` imported the missing `yahoo-finance2`. Fixed — now returns 200 and Telegram delivery is verified. `TELEGRAM_BOT_TOKEN` + `ALERT_SECRET` confirmed set in Netlify env.
 - [ ] Mobile responsive layout (table is wide)
 
 ---
