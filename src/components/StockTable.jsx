@@ -19,9 +19,6 @@ export default function StockTable({ positions, prices, onDelete }) {
     const last        = q?.currentPrice ?? null
     const change      = q?.change ?? null           // $ change today
     const changePct   = q?.changePercent ?? null    // % change today
-    const prevClose   = q?.previousClose ?? null
-    const bid         = q?.bid ?? null
-    const ask         = q?.ask ?? null
     const marketState = q?.marketState ?? null
 
     const cost        = pos.avg_cost                // avg cost per share
@@ -41,7 +38,7 @@ export default function StockTable({ positions, prices, onDelete }) {
     if (todayGL !== null)      totalTodayGL      += todayGL
     if (unrealizedGL !== null) totalUnrealizedGL += unrealizedGL
 
-    return { pos, last, change, changePct, bid, ask, cost, qty, dayValue, todayGL, unrealizedGL, unrealizedPct, marketState }
+    return { pos, last, change, changePct, cost, qty, dayValue, todayGL, unrealizedGL, unrealizedPct, marketState }
   })
 
   const totalInvested = positions.reduce((s, p) => s + p.shares * p.avg_cost, 0)
@@ -63,8 +60,6 @@ export default function StockTable({ positions, prices, onDelete }) {
               <th className="right">Qty</th>
               <th className="right">Last</th>
               <th className="right">Change</th>
-              <th className="right">Bid</th>
-              <th className="right">Ask</th>
               <th className="right">Avg Cost</th>
               <th className="right">Day's Value</th>
               <th className="right">Today G/L</th>
@@ -73,7 +68,7 @@ export default function StockTable({ positions, prices, onDelete }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map(({ pos, last, change, changePct, bid, ask, cost, qty, dayValue, todayGL, unrealizedGL, unrealizedPct, marketState }) => (
+            {rows.map(({ pos, last, change, changePct, cost, qty, dayValue, todayGL, unrealizedGL, unrealizedPct, marketState }) => (
               <tr key={pos.ticker}>
                 <td>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -97,12 +92,6 @@ export default function StockTable({ positions, prices, onDelete }) {
                     : <Dash />}
                 </td>
                 <td className="right" style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-                  {bid !== null ? `$${bid.toFixed(2)}` : <Dash />}
-                </td>
-                <td className="right" style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-                  {ask !== null ? `$${ask.toFixed(2)}` : <Dash />}
-                </td>
-                <td className="right" style={{ color: 'var(--text-muted)', fontSize: 13 }}>
                   ${cost.toFixed(2)}
                 </td>
                 <td className="right" style={{ fontWeight: 500 }}>
@@ -124,7 +113,7 @@ export default function StockTable({ positions, prices, onDelete }) {
           </tbody>
           <tfoot>
             <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--surface2)' }}>
-              <td colSpan={7} style={{ padding: '12px 16px', fontWeight: 700, fontSize: 13, color: 'var(--text-muted)' }}>
+              <td colSpan={5} style={{ padding: '12px 16px', fontWeight: 700, fontSize: 13, color: 'var(--text-muted)' }}>
                 TOTAL
               </td>
               <td className="right" style={{ fontWeight: 700, padding: '12px 16px' }}>
