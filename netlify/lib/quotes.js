@@ -14,6 +14,19 @@ const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 
 const round = (n) => (n == null ? null : Math.round(n * 10000) / 10000)
 
+// Robust "latest" price for the thin extended-hours series. Yahoo's 1-minute
+// pre/post-market bars contain occasional zero-volume junk ticks (e.g. a lone
+// 263 among 246s). Use the most recent bar, but if it deviates >2% from the
+// median of the recent window, treat it as a spike and use the median instead.
+function robustLast(arr) {
+  if (!arr.length) return null
+  const recent = arr.slice(-7)
+  const med = [...recent].sort((a, b) => a - b)[Math.floor(recent.length / 2)]
+  const last = arr[arr.length - 1]
+  if (med && Math.abs(last - med) / med > 0.02) return med
+  return last
+}
+
 export async function fetchQuote(ticker) {
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=1m&range=1d&includePrePost=true`
   const res = await fetch(url, { headers: { 'User-Agent': UA, 'Accept': 'application/json' } })
@@ -47,17 +60,18 @@ export async function fetchQuote(ticker) {
   const regStart = periods?.regular?.start ?? null
   const regEnd = periods?.regular?.end ?? null
 
-  let dayOpen = null, postPrice = null, prePrice = null
+  let dayOpen = null
+  const postCloses = [], preCloses = []
   for (let i = 0; i < ts.length; i++) {
     if (dayOpen === null && opens[i] != null && (regStart === null || ts[i] >= regStart)) dayOpen = opens[i]
     if (closes[i] == null) continue
-    if (regEnd !== null && ts[i] >= regEnd) postPrice = closes[i]        // keep last post-market bar
-    else if (regStart !== null && ts[i] < regStart) prePrice = closes[i] // keep last pre-market bar
+    if (regEnd !== null && ts[i] >= regEnd) postCloses.push(closes[i])
+    else if (regStart !== null && ts[i] < regStart) preCloses.push(closes[i])
   }
 
   let currentPrice = regular
-  if (marketState === 'POST' && postPrice != null) currentPrice = postPrice
-  else if (marketState === 'PRE' && prePrice != null) currentPrice = prePrice
+  if (marketState === 'POST') currentPrice = robustLast(postCloses) ?? regular
+  else if (marketState === 'PRE') currentPrice = robustLast(preCloses) ?? regular
 
   const change = currentPrice != null && prev != null ? currentPrice - prev : null
   const changePct = change != null && prev ? (change / prev) * 100 : null

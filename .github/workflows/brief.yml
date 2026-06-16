@@ -1,18 +1,28 @@
 name: Pre-Market Brief
 
+# GitHub Actions cron is UTC-only with no DST support. To hit a hard 07:30
+# America/New_York year-round, we schedule BOTH candidate UTC times and let a
+# guard step proceed only when it is actually 07:xx in New York:
+#   - 11:30 UTC = 07:30 EDT (summer)   / 06:30 EST (winter → skipped)
+#   - 12:30 UTC = 07:30 EST (winter)   / 08:30 EDT (summer → skipped)
 on:
   schedule:
-    # 11:30 UTC ≈ 07:30 America/New_York (EDT) — about 2h before the 09:30 open.
-    # Cron is fixed UTC, so under EST this lands ~06:30 ET; still pre-market.
-    - cron: '30 11 * * 1-5'   # weekdays
-  workflow_dispatch:           # allow manual trigger for testing
+    - cron: '30 11 * * 1-5'
+    - cron: '30 12 * * 1-5'
+  workflow_dispatch:           # manual trigger (bypasses the time guard)
 
 jobs:
   send_brief:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger portfolio brief
+      - name: Send brief at 07:30 ET
         run: |
+          ET_HOUR=$(TZ='America/New_York' date +%H)
+          echo "New York hour is $ET_HOUR (event: ${{ github.event_name }})"
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$ET_HOUR" != "07" ]; then
+            echo "Not 07:xx ET — skipping (other scheduled time will fire)."
+            exit 0
+          fi
           echo "Sending StockBot pre-market brief at $(date -u)"
           RESPONSE=$(curl -sf -X POST "${{ secrets.NETLIFY_SITE_URL }}/api/brief" \
             -H "Content-Type: application/json" \
