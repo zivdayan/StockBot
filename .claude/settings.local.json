@@ -14,7 +14,10 @@
       "Bash(python3 -c ':*)",
       "Bash(pacman -Q python-pandas python-openpyxl)",
       "Bash(sudo pacman:*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "Bash(ls:*)",
+      "Bash(npm pkg:*)",
+      "Bash(npm install:*)"
     ]
   }
 }

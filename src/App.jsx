@@ -5,7 +5,7 @@ import AddPositionForm from './components/AddPositionForm.jsx'
 import AlertSettings from './components/AlertSettings.jsx'
 import ImportPortfolio from './components/ImportPortfolio.jsx'
 
-const REFRESH_INTERVAL = 60_000 // 60 seconds
+const REFRESH_INTERVAL = 30_000 // 30 seconds
 
 const TABS = [
   { id: 'dashboard', label: '📊 Dashboard' },
