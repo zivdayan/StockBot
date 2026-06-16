@@ -34,3 +34,6 @@ export const getTelegramChats = () => request('/telegram-chats')
 export const getSettings = () => request('/settings')
 export const saveSettings = (settings) =>
   request('/settings', { method: 'POST', body: JSON.stringify(settings) })
+
+// Brief — send a portfolio briefing to all recipients now
+export const triggerBrief = () => request('/brief', { method: 'POST' })

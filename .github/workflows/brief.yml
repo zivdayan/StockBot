@@ -1,0 +1,26 @@
+name: Pre-Market Brief
+
+on:
+  schedule:
+    # 11:30 UTC ≈ 07:30 America/New_York (EDT) — about 2h before the 09:30 open.
+    # Cron is fixed UTC, so under EST this lands ~06:30 ET; still pre-market.
+    - cron: '30 11 * * 1-5'   # weekdays
+  workflow_dispatch:           # allow manual trigger for testing
+
+jobs:
+  send_brief:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger portfolio brief
+        run: |
+          echo "Sending StockBot pre-market brief at $(date -u)"
+          RESPONSE=$(curl -sf -X POST "${{ secrets.NETLIFY_SITE_URL }}/api/brief" \
+            -H "Content-Type: application/json" \
+            -w "\n%{http_code}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+          echo "Response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Brief failed with HTTP $HTTP_CODE"
+            exit 1
+          fi

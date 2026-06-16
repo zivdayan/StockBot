@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { getSettings, saveSettings } from '../api/client.js'
+import { getSettings, saveSettings, triggerBrief } from '../api/client.js'
 import { getTelegramChats } from '../api/client.js'
 
 const DEFAULTS = {
@@ -129,6 +129,22 @@ export default function AlertSettings() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
+  const [briefing, setBriefing] = useState(false)
+  const [briefMsg, setBriefMsg] = useState(null)
+
+  async function handleBrief() {
+    setBriefing(true); setBriefMsg(null)
+    try {
+      const res = await triggerBrief()
+      setBriefMsg(res.ok
+        ? { ok: true, text: `Brief sent to ${res.recipients} recipient${res.recipients !== 1 ? 's' : ''}.` }
+        : { ok: false, text: res.error || 'Brief failed — check recipients and bot token.' })
+    } catch (err) {
+      setBriefMsg({ ok: false, text: err.message })
+    } finally {
+      setBriefing(false)
+    }
+  }
 
   useEffect(() => {
     getSettings()
@@ -239,7 +255,17 @@ export default function AlertSettings() {
             <button className="btn" type="submit" disabled={saving}>
               {saving ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Saving…</> : 'Save Settings'}
             </button>
+            <button className="btn secondary" type="button" onClick={handleBrief}
+              disabled={briefing || form.telegramRecipients.length === 0}
+              title={form.telegramRecipients.length === 0 ? 'Add a recipient first' : 'Send a briefing to all recipients now'}>
+              {briefing ? <><span className="spinner" style={{ width: 14, height: 14 }} /> Sending…</> : '📨 Trigger Brief'}
+            </button>
           </div>
+          {briefMsg && (
+            <div className={`banner ${briefMsg.ok ? 'success' : 'error'}`} style={{ marginTop: 12 }}>
+              {briefMsg.text}
+            </div>
+          )}
         </form>
       </div>
 

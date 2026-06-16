@@ -17,7 +17,13 @@
       "Bash(python3:*)",
       "Bash(ls:*)",
       "Bash(npm pkg:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(curl -s https://stockbot-ziv.netlify.app/api/portfolio)",
+      "Bash(curl -s \"https://stockbot-ziv.netlify.app/api/prices?tickers=AMZN,EQIX,GOOG,IBIT,INTC,MRVL,NVDA,SNDK,SPCX\")",
+      "Bash(grep -coE '[0-9]+\\\\.[0-9]{2,4}' data)",
+      "Bash(grep -oE '[0-9]+\\\\.[0-9]{2,4}' data)",
+      "Bash(node *)",
+      "Bash(curl -s \"https://stockbot-ziv.netlify.app/api/settings\")"
     ]
   }
 }
