@@ -7,6 +7,7 @@ const DEFAULTS = {
   stockAlertThresholdPct: 2,
   portfolioAlertThresholdPct: 1,
   telegramRecipients: [],   // [{ name: string, chatId: string }]
+  telegramContacts: [],     // address book: [{ name: string, chatId: string }]
   dailySummaryHour: 17,
 }
 
@@ -48,15 +49,16 @@ export default async function handler(req) {
 
   if (req.method === 'POST') {
     const body = await req.json()
+    const cleanList = (arr) =>
+      Array.isArray(arr)
+        ? arr.filter(r => r.chatId).map(r => ({ name: String(r.name || 'Unnamed'), chatId: String(r.chatId) }))
+        : []
+
     const settings = {
       stockAlertThresholdPct: Number(body.stockAlertThresholdPct) || DEFAULTS.stockAlertThresholdPct,
       portfolioAlertThresholdPct: Number(body.portfolioAlertThresholdPct) || DEFAULTS.portfolioAlertThresholdPct,
-      telegramRecipients: Array.isArray(body.telegramRecipients)
-        ? body.telegramRecipients.filter(r => r.chatId).map(r => ({
-            name: String(r.name || 'Unnamed'),
-            chatId: String(r.chatId),
-          }))
-        : [],
+      telegramRecipients: cleanList(body.telegramRecipients),
+      telegramContacts: cleanList(body.telegramContacts),
       dailySummaryHour: Number(body.dailySummaryHour) ?? DEFAULTS.dailySummaryHour,
     }
     await store.set(KEY, JSON.stringify(settings))
