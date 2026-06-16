@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run:*)",
+      "Bash(ls -la /home/ziv/honeymoon/.env*)",
+      "Read(//home/ziv/.config/**)",
+      "Read(//home/ziv/.config/gh/**)",
+      "Read(//home/ziv/**)",
+      "Read(//home/ziv/.netlify/**)",
+      "Bash(xargs cat:*)"
+    ]
+  }
+}

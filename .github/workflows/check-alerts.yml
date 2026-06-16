@@ -1,0 +1,25 @@
+name: Hourly Stock Alert Check
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # every hour on the hour (UTC)
+  workflow_dispatch:        # allow manual trigger for testing
+
+jobs:
+  check_alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger alert check
+        run: |
+          echo "Triggering StockBot alert check at $(date -u)"
+          RESPONSE=$(curl -sf -X POST "${{ secrets.NETLIFY_SITE_URL }}/api/check-alerts" \
+            -H "x-alert-token: ${{ secrets.ALERT_SECRET }}" \
+            -H "Content-Type: application/json" \
+            -w "\n%{http_code}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+          echo "Response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Alert check failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
