@@ -29,6 +29,20 @@ async function fetchTicker(ticker) {
   // Derive market state from current trading periods
   const now = Date.now() / 1000
   const periods = meta.currentTradingPeriod
+
+  // Regular-session open: first non-null open bar at/after the regular session
+  // start. meta has no regularMarketOpen, so pull it from the intraday series.
+  // The regular-session filter avoids picking up a pre-market bar.
+  const timestamps = result.timestamp ?? []
+  const opens = result.indicators?.quote?.[0]?.open ?? []
+  const regStart = periods?.regular?.start ?? null
+  let dayOpen = null
+  for (let i = 0; i < timestamps.length; i++) {
+    if (opens[i] == null) continue
+    if (regStart !== null && timestamps[i] < regStart) continue
+    dayOpen = opens[i]
+    break
+  }
   let marketState = 'CLOSED'
   if (periods) {
     if (now >= periods.regular.start && now < periods.regular.end)   marketState = 'REGULAR'
@@ -43,6 +57,7 @@ async function fetchTicker(ticker) {
     change:        change !== null ? Math.round(change * 10000) / 10000 : null,
     changePercent: changePct !== null ? Math.round(changePct * 10000) / 10000 : null,
     previousClose: prev,
+    dayOpen:       dayOpen,
     high:          meta.regularMarketDayHigh ?? null,
     low:           meta.regularMarketDayLow ?? null,
     volume:        meta.regularMarketVolume ?? null,

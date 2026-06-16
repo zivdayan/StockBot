@@ -17,8 +17,9 @@ export default function StockTable({ positions, prices, onDelete }) {
   const rows = positions.map((pos) => {
     const q = prices[pos.ticker]
     const last        = q?.currentPrice ?? null
-    const change      = q?.change ?? null           // $ change today
-    const changePct   = q?.changePercent ?? null    // % change today
+    const change      = q?.change ?? null           // $ change vs prev close (the "Change" column)
+    const changePct   = q?.changePercent ?? null    // % change vs prev close
+    const dayOpen     = q?.dayOpen ?? null           // today's regular-session open
     const marketState = q?.marketState ?? null
 
     const cost        = pos.avg_cost                // avg cost per share
@@ -27,8 +28,12 @@ export default function StockTable({ positions, prices, onDelete }) {
     // Day's value = current total value of this position
     const dayValue    = last !== null ? qty * last : null
 
-    // Today G/L = change per share × qty  (broker calls this "Today Gain/Loss")
-    const todayGL     = change !== null ? qty * change : null
+    // Today G/L = (last − day's open) × qty, matching the broker's intraday
+    // reference. Falls back to the prev-close based change if open is missing.
+    const todayGL =
+      last !== null && dayOpen !== null ? qty * (last - dayOpen)
+      : change !== null                 ? qty * change
+      : null
 
     // Unrealized G/L = (last − avg_cost) × qty
     const unrealizedGL = last !== null ? qty * (last - cost) : null
