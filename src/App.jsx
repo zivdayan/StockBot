@@ -3,12 +3,14 @@ import { getPortfolio, getPrices, deletePosition as removePosition } from './api
 import StockTable from './components/StockTable.jsx'
 import AddPositionForm from './components/AddPositionForm.jsx'
 import AlertSettings from './components/AlertSettings.jsx'
+import ImportPortfolio from './components/ImportPortfolio.jsx'
 
 const REFRESH_INTERVAL = 60_000 // 60 seconds
 
 const TABS = [
   { id: 'dashboard', label: '📊 Dashboard' },
   { id: 'portfolio', label: '➕ Manage Portfolio' },
+  { id: 'import', label: '📥 Import' },
   { id: 'settings', label: '⚙️ Alert Settings' },
 ]
 
@@ -115,6 +117,10 @@ export default function App() {
 
       {tab === 'portfolio' && (
         <AddPositionForm onAdded={handlePositionAdded} />
+      )}
+
+      {tab === 'import' && (
+        <ImportPortfolio onImported={() => { refresh(); setTab('dashboard') }} />
       )}
 
       {tab === 'settings' && <AlertSettings />}

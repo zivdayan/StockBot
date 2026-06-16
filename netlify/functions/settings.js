@@ -6,7 +6,7 @@ const KEY = 'settings'
 const DEFAULTS = {
   stockAlertThresholdPct: 2,
   portfolioAlertThresholdPct: 1,
-  telegramChatId: '',
+  telegramRecipients: [],   // [{ name: string, chatId: string }]
   dailySummaryHour: 17,
 }
 
@@ -35,8 +35,15 @@ export default async function handler(req) {
 
   if (req.method === 'GET') {
     const raw = await store.get(KEY)
-    const data = raw ? { ...DEFAULTS, ...JSON.parse(raw) } : DEFAULTS
-    return cors(data)
+    const saved = raw ? JSON.parse(raw) : {}
+
+    // Migrate legacy single telegramChatId → recipients list
+    if (saved.telegramChatId && !saved.telegramRecipients) {
+      saved.telegramRecipients = [{ name: 'Me', chatId: saved.telegramChatId }]
+      delete saved.telegramChatId
+    }
+
+    return cors({ ...DEFAULTS, ...saved })
   }
 
   if (req.method === 'POST') {
@@ -44,8 +51,13 @@ export default async function handler(req) {
     const settings = {
       stockAlertThresholdPct: Number(body.stockAlertThresholdPct) || DEFAULTS.stockAlertThresholdPct,
       portfolioAlertThresholdPct: Number(body.portfolioAlertThresholdPct) || DEFAULTS.portfolioAlertThresholdPct,
-      telegramChatId: String(body.telegramChatId || ''),
-      dailySummaryHour: Number(body.dailySummaryHour) || DEFAULTS.dailySummaryHour,
+      telegramRecipients: Array.isArray(body.telegramRecipients)
+        ? body.telegramRecipients.filter(r => r.chatId).map(r => ({
+            name: String(r.name || 'Unnamed'),
+            chatId: String(r.chatId),
+          }))
+        : [],
+      dailySummaryHour: Number(body.dailySummaryHour) ?? DEFAULTS.dailySummaryHour,
     }
     await store.set(KEY, JSON.stringify(settings))
     return cors({ ok: true, settings })

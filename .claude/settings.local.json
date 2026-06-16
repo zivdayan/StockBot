@@ -7,7 +7,14 @@
       "Read(//home/ziv/.config/gh/**)",
       "Read(//home/ziv/**)",
       "Read(//home/ziv/.netlify/**)",
-      "Bash(xargs cat:*)"
+      "Bash(xargs cat:*)",
+      "Bash(python3 -c \"import xlrd; print\\('ok'\\)\")",
+      "Bash(pip3 install:*)",
+      "Bash(python3 -m pip install xlrd -q)",
+      "Bash(python3 -c ':*)",
+      "Bash(pacman -Q python-pandas python-openpyxl)",
+      "Bash(sudo pacman:*)",
+      "Bash(python3:*)"
     ]
   }
 }

@@ -23,6 +23,10 @@ export const deletePosition = (ticker) =>
 export const getPrices = (tickers) =>
   request(`/prices?tickers=${encodeURIComponent(tickers.join(','))}`)
 
+// Import
+export const importPortfolio = (content, mode = 'replace') =>
+  request('/import-portfolio', { method: 'POST', body: JSON.stringify({ content, mode }) })
+
 // Settings
 export const getSettings = () => request('/settings')
 export const saveSettings = (settings) =>

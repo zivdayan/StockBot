@@ -29,21 +29,25 @@ function usd(val) {
 
 // ── Telegram ──────────────────────────────────────────────────────────────────
 
-async function sendTelegram(chatId, text) {
+async function sendTelegram(recipients, text) {
   const token = process.env.TELEGRAM_BOT_TOKEN
-  if (!token || !chatId) {
+  if (!token || !recipients?.length) {
     console.warn('Telegram not configured — skipping alert.')
     return
   }
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
-  })
-  if (!res.ok) {
-    const err = await res.text()
-    console.error('Telegram error:', err)
-  }
+  await Promise.all(
+    recipients.map(async ({ chatId, name }) => {
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+      })
+      if (!res.ok) {
+        const err = await res.text()
+        console.error(`Telegram error for ${name} (${chatId}):`, err)
+      }
+    })
+  )
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -70,7 +74,15 @@ export default async function handler(req) {
 
   const { positions = [] } = portfolioRaw ? JSON.parse(portfolioRaw) : {}
   const snapshot = snapshotRaw ? JSON.parse(snapshotRaw) : null
-  const settings = settingsRaw ? { ...DEFAULTS, ...JSON.parse(settingsRaw) } : DEFAULTS
+  const savedSettings = settingsRaw ? JSON.parse(settingsRaw) : {}
+
+  // Migrate legacy single chatId → recipients list
+  if (savedSettings.telegramChatId && !savedSettings.telegramRecipients) {
+    savedSettings.telegramRecipients = [{ name: 'Me', chatId: savedSettings.telegramChatId }]
+  }
+
+  const settings = { ...DEFAULTS, ...savedSettings }
+  const recipients = settings.telegramRecipients || []
 
   if (!positions.length) {
     return json({ ok: true, message: 'No positions to check.' })
@@ -170,13 +182,13 @@ export default async function handler(req) {
       `Total value: ${usd(totalCurrent)}\n` +
       `Overall P&L: ${totalPnl >= 0 ? '+' : '-'}${usd(totalPnl)} (${pct(totalPnlPct)})`
 
-    await sendTelegram(settings.telegramChatId, summaryMsg)
+    await sendTelegram(recipients, summaryMsg)
   }
 
   // ── Send batched stock/portfolio alerts ───────────────────────────────────
   if (alerts.length) {
     const msg = `⚠️ <b>StockBot Alert</b>\n\n` + alerts.join('\n\n')
-    await sendTelegram(settings.telegramChatId, msg)
+    await sendTelegram(recipients, msg)
   }
 
   // ── Save new snapshot ─────────────────────────────────────────────────────
