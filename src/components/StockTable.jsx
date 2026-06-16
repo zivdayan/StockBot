@@ -167,7 +167,7 @@ function GLCell({ value, pct }) {
   const color = value === 0 ? 'var(--text-muted)' : up ? 'var(--green)' : 'var(--red)'
   return (
     <div style={{ color }}>
-      <div style={{ fontWeight: 600 }}>{up ? '+' : ''}{fmtGL$(value)}</div>
+      <div style={{ fontWeight: 600 }}>{fmtGL$(value)}</div>
       {pct !== null && pct !== undefined && (
         <div style={{ fontSize: 11 }}>{up ? '+' : ''}{pct.toFixed(2)}%</div>
       )}
