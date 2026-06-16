@@ -164,28 +164,49 @@ export default function ImportPortfolio({ onImported }) {
   )
 }
 
-// ── Parser (mirrors server-side logic, runs in browser) ───────────────────────
+// ── Parser (mirrors server-side logic in import-portfolio.js, for preview) ─────
+const TICKER_RE = /^[A-Z][A-Z.]{0,6}$/
+const num = (s) => (s == null ? NaN : parseFloat(String(s).replace(/[$,%\s]/g, '')))
+const firstNum = (s) => {
+  const m = String(s ?? '').match(/-?[\d,]+\.?\d*/)
+  return m ? parseFloat(m[0].replace(/,/g, '')) : NaN
+}
+
 function parseTSV(text) {
-  const lines = text.trim().split('\n')
-  if (lines.length < 2) throw new Error('File has no data rows')
+  const lines = text.split('\n')
+  const headerIdx = lines.findIndex(l => {
+    const c = l.split('\t').map(x => x.trim().toLowerCase())
+    return c.includes('symbol') && c.includes('qty')
+  })
+  if (headerIdx === -1) throw new Error('Could not find the Symbol/Qty header row in the export')
 
-  const header = lines[0].split('\t').map(h => h.trim())
-  const symbolIdx = header.findIndex(h => h.toLowerCase() === 'symbol')
-  const qtyIdx = header.findIndex(h => h.toLowerCase() === 'qty')
-  const avgCostIdx = header.findIndex(h => h.toLowerCase().includes('average cost'))
-
-  if (symbolIdx === -1 || qtyIdx === -1 || avgCostIdx === -1) {
-    throw new Error(`Missing required columns. Found: ${header.join(', ')}`)
+  const records = []
+  let cur = null
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const first = lines[i].split('\t')[0].trim()
+    if (TICKER_RE.test(first)) {
+      if (cur !== null) records.push(cur)
+      cur = lines[i]
+    } else if (cur !== null) {
+      cur += lines[i]
+    }
   }
+  if (cur !== null) records.push(cur)
 
   const positions = []
-  for (let i = 1; i < lines.length; i++) {
-    const cells = lines[i].split('\t').map(c => c.trim())
-    const ticker = cells[symbolIdx]
-    const qty = parseFloat(cells[qtyIdx])
-    const avgCost = parseFloat(cells[avgCostIdx])
-    if (!ticker || isNaN(qty) || isNaN(avgCost)) continue
-    positions.push({ ticker: ticker.toUpperCase(), shares: qty, avg_cost: avgCost })
+  for (const rec of records) {
+    const c = rec.split('\t')
+    const ticker = c[0].trim().toUpperCase()
+    const shares = num(c[2])
+    const avg_cost = num(c[7])
+    const todayGL = num(c[9])
+    const last = firstNum(c[3])
+    if (!ticker || isNaN(shares) || isNaN(avg_cost)) continue
+    const pos = { ticker, shares, avg_cost }
+    if (!isNaN(todayGL) && !isNaN(last) && shares) {
+      pos.today_ref = Math.round((last - todayGL / shares) * 10000) / 10000
+    }
+    positions.push(pos)
   }
 
   if (!positions.length) throw new Error('No valid positions found in file')

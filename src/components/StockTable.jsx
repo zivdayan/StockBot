@@ -14,12 +14,16 @@ export default function StockTable({ positions, prices, onDelete }) {
   let totalTodayGL = 0
   let totalUnrealizedGL = 0
 
+  // Current trading day in US/Eastern — today_ref is only valid for the
+  // session it was imported in.
+  const etToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+
   const rows = positions.map((pos) => {
     const q = prices[pos.ticker]
     const last        = q?.currentPrice ?? null
     const change      = q?.change ?? null           // $ change vs prev close (the "Change" column)
     const changePct   = q?.changePercent ?? null    // % change vs prev close
-    const dayOpen     = q?.dayOpen ?? null           // today's regular-session open
+    const prevClose   = q?.previousClose ?? null
     const marketState = q?.marketState ?? null
 
     const cost        = pos.avg_cost                // avg cost per share
@@ -28,12 +32,13 @@ export default function StockTable({ positions, prices, onDelete }) {
     // Day's value = current total value of this position
     const dayValue    = last !== null ? qty * last : null
 
-    // Today G/L = (last − day's open) × qty, matching the broker's intraday
-    // reference. Falls back to the prev-close based change if open is missing.
-    const todayGL =
-      last !== null && dayOpen !== null ? qty * (last - dayOpen)
-      : change !== null                 ? qty * change
-      : null
+    // Today G/L = (last − reference) × qty. The reference matches the broker's
+    // intraday basis: use the imported today_ref while it's still the same
+    // trading session, otherwise fall back to previous close (by then every
+    // share is an overnight hold, so prev close is the correct reference).
+    const todayRef =
+      pos.today_ref != null && pos.ref_date === etToday ? pos.today_ref : prevClose
+    const todayGL = last !== null && todayRef !== null ? qty * (last - todayRef) : null
 
     // Unrealized G/L = (last − avg_cost) × qty
     const unrealizedGL = last !== null ? qty * (last - cost) : null

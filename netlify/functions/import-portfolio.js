@@ -13,35 +13,70 @@ function cors(body, status = 200) {
   })
 }
 
+const TICKER_RE = /^[A-Z][A-Z.]{0,6}$/
+const num = (s) => (s == null ? NaN : parseFloat(String(s).replace(/[$,%\s]/g, '')))
+const firstNum = (s) => {
+  const m = String(s ?? '').match(/-?[\d,]+\.?\d*/)
+  return m ? parseFloat(m[0].replace(/,/g, '')) : NaN
+}
+
 /**
- * Parses the broker TSV export (disguised as .xls):
- * Columns: Symbol, Description, Qty, Bid, Ask, Last, Change, Day's Value, Average Cost, Gain, Profit/Loss, Value
- * Skips the totals footer row (Symbol = NaN / empty).
+ * Parses the broker positions export (HTML-clipboard TSV disguised as .xls).
+ *
+ * Each position record begins on a line whose first tab-cell is a ticker
+ * symbol. The broker splits multi-line cells (the Last/Change cell) across
+ * physical lines, so continuation lines are concatenated back onto the record.
+ * Header/summary rows above the table and the totals footer are ignored.
+ *
+ * Fixed data-column layout (note the margin-flag column after Symbol):
+ *   [0]Symbol [1]flag [2]Qty [3]Last(+chg) [4]Chg% [5]Bid [6]Ask
+ *   [7]Cost [8]Day'sValue [9]TodayG/L [10]UnrealizedG/L [11]TipRanks
+ *
+ * Returns positions including `today_ref` — the broker's intraday cost basis
+ * for the Today G/L column, derived as last − (todayGL / shares). This is the
+ * per-position reference the broker measures "today's" gain from (purchase
+ * price for shares bought today, prev close for overnight holds, a blend for
+ * positions that were added to during the session).
  */
 function parseTSV(text) {
-  const lines = text.trim().split('\n')
-  if (lines.length < 2) throw new Error('File has no data rows')
+  const lines = text.split('\n')
+  const headerIdx = lines.findIndex(l => {
+    const c = l.split('\t').map(x => x.trim().toLowerCase())
+    return c.includes('symbol') && c.includes('qty')
+  })
+  if (headerIdx === -1) throw new Error('Could not find the Symbol/Qty header row in the export')
 
-  const header = lines[0].split('\t').map(h => h.trim())
-  const symbolIdx = header.findIndex(h => h.toLowerCase() === 'symbol')
-  const qtyIdx = header.findIndex(h => h.toLowerCase() === 'qty')
-  const avgCostIdx = header.findIndex(h => h.toLowerCase().includes('average cost'))
-
-  if (symbolIdx === -1 || qtyIdx === -1 || avgCostIdx === -1) {
-    throw new Error(`Missing required columns. Found: ${header.join(', ')}`)
+  // Group physical lines back into one string per position record.
+  const records = []
+  let cur = null
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const first = lines[i].split('\t')[0].trim()
+    if (TICKER_RE.test(first)) {
+      if (cur !== null) records.push(cur)
+      cur = lines[i]
+    } else if (cur !== null) {
+      cur += lines[i]          // continuation of a multi-line cell
+    }
   }
+  if (cur !== null) records.push(cur)
 
   const positions = []
-  for (let i = 1; i < lines.length; i++) {
-    const cells = lines[i].split('\t').map(c => c.trim())
-    const ticker = cells[symbolIdx]
-    const qty = parseFloat(cells[qtyIdx])
-    const avgCost = parseFloat(cells[avgCostIdx])
+  for (const rec of records) {
+    const c = rec.split('\t')
+    const ticker = c[0].trim().toUpperCase()
+    const shares = num(c[2])
+    const avg_cost = num(c[7])
+    const todayGL = num(c[9])
+    const last = firstNum(c[3])
 
-    // Skip totals row and any row without a valid ticker/qty
-    if (!ticker || ticker === '' || isNaN(qty) || isNaN(avgCost)) continue
+    // Skip totals footer and any row without a valid ticker/qty/cost
+    if (!ticker || isNaN(shares) || isNaN(avg_cost)) continue
 
-    positions.push({ ticker: ticker.toUpperCase(), shares: qty, avg_cost: avgCost })
+    const pos = { ticker, shares, avg_cost }
+    if (!isNaN(todayGL) && !isNaN(last) && shares) {
+      pos.today_ref = Math.round((last - todayGL / shares) * 10000) / 10000
+    }
+    positions.push(pos)
   }
 
   if (!positions.length) throw new Error('No valid positions found in file')
@@ -80,6 +115,12 @@ export default async function handler(req) {
   } catch (err) {
     return cors({ error: err.message }, 422)
   }
+
+  // Stamp the trading day (US/Eastern) this snapshot was taken. today_ref is
+  // only valid for that session; after it, the dashboard falls back to
+  // previous close (by then every share is an overnight hold).
+  const refDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
+  for (const p of imported) if (p.today_ref != null) p.ref_date = refDate
 
   const store = getStore(STORE_NAME)
   let positions
