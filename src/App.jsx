@@ -4,6 +4,7 @@ import StockTable from './components/StockTable.jsx'
 import AddPositionForm from './components/AddPositionForm.jsx'
 import AlertSettings from './components/AlertSettings.jsx'
 import ImportPortfolio from './components/ImportPortfolio.jsx'
+import AiBrief from './components/AiBrief.jsx'
 
 const REFRESH_INTERVAL = 30_000 // 30 seconds
 
@@ -111,7 +112,10 @@ export default function App() {
         loadingPositions ? (
           <div className="loading-row"><span className="spinner" /> Loading portfolio…</div>
         ) : (
-          <StockTable positions={positions} prices={prices} onDelete={handleDelete} />
+          <>
+            {positions.length > 0 && <AiBrief />}
+            <StockTable positions={positions} prices={prices} onDelete={handleDelete} />
+          </>
         )
       )}
 

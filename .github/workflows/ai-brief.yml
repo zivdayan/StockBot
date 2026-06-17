@@ -1,0 +1,36 @@
+name: Daily AI Brief
+
+# Standalone daily AI portfolio analysis, sent ~16:30 ET (just after the close).
+# GitHub cron is UTC-only with no DST; schedule both candidate times and let a
+# New-York-hour guard fire only the right one (same pattern as brief.yml):
+#   20:30 UTC = 16:30 EDT (summer)  / 15:30 EST (winter → skipped)
+#   21:30 UTC = 16:30 EST (winter)  / 17:30 EDT (summer → skipped)
+on:
+  schedule:
+    - cron: '30 20 * * 1-5'
+    - cron: '30 21 * * 1-5'
+  workflow_dispatch:           # manual trigger (bypasses the time guard)
+
+jobs:
+  ai_brief:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send daily AI brief at 16:30 ET
+        run: |
+          ET_HOUR=$(TZ='America/New_York' date +%H)
+          echo "New York hour is $ET_HOUR (event: ${{ github.event_name }})"
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$ET_HOUR" != "16" ]; then
+            echo "Not 16:xx ET — skipping (other scheduled time will fire)."
+            exit 0
+          fi
+          RESPONSE=$(curl -sf -X POST "${{ secrets.NETLIFY_SITE_URL }}/api/ai-brief" \
+            -H "Content-Type: application/json" \
+            -d '{"channel":"telegram"}' \
+            -w "\n%{http_code}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+          echo "Response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "AI brief failed with HTTP $HTTP_CODE"
+            exit 1
+          fi

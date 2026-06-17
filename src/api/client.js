@@ -37,3 +37,11 @@ export const saveSettings = (settings) =>
 
 // Brief — send a portfolio briefing to all recipients now
 export const triggerBrief = () => request('/brief', { method: 'POST' })
+
+// Price history for the per-symbol chart
+export const getHistory = (ticker, range = '1Y') =>
+  request(`/history?ticker=${encodeURIComponent(ticker)}&range=${encodeURIComponent(range)}`)
+
+// AI portfolio analysis (Perplexity). channel 'web' returns { analysis }.
+export const getAiBrief = () =>
+  request('/ai-brief', { method: 'POST', body: JSON.stringify({ channel: 'web' }) })

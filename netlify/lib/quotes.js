@@ -104,3 +104,29 @@ export async function fetchQuotes(tickers) {
   )
   return Object.fromEntries(entries)
 }
+
+// Historical daily/weekly closes for the per-symbol performance chart.
+const RANGE_MAP = {
+  '1M':  { range: '1mo', interval: '1d' },
+  '6M':  { range: '6mo', interval: '1d' },
+  '1Y':  { range: '1y',  interval: '1d' },
+  'ALL': { range: 'max', interval: '1wk' },
+}
+
+export async function fetchHistory(ticker, range = '1Y') {
+  const { range: r, interval } = RANGE_MAP[range] || RANGE_MAP['1Y']
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(ticker)}?interval=${interval}&range=${r}`
+  const res = await fetch(url, { headers: { 'User-Agent': UA, 'Accept': 'application/json' } })
+  if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+  const result = (await res.json())?.chart?.result?.[0]
+  if (!result) throw new Error('No result in chart response')
+
+  const ts = result.timestamp ?? []
+  const closes = result.indicators?.quote?.[0]?.close ?? []
+  const points = []
+  for (let i = 0; i < ts.length; i++) {
+    if (closes[i] != null) points.push({ t: ts[i] * 1000, close: Math.round(closes[i] * 100) / 100 })
+  }
+  return points
+}

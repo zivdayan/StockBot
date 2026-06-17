@@ -10,7 +10,8 @@
  */
 import { getStore } from '@netlify/blobs'
 import { fetchQuotes } from '../lib/quotes.js'
-import { sendTelegram } from '../lib/telegram.js'
+import { sendTelegram, escapeHtml } from '../lib/telegram.js'
+import { buildContext, analyzePortfolio } from '../lib/ai.js'
 
 const STORE_NAME = 'stockbot'
 
@@ -104,7 +105,20 @@ export default async function handler(req) {
     `📋 <b>Positions</b>\n${posLines.join('\n')}\n` +
     (moverLines.length ? `━━━━━━━━━━━━━━━━━━━━\n🔀 <b>Top movers</b>\n${moverLines.join('\n')}` : '')
 
-  const send = await sendTelegram(recipients, msg)
+  // Append the AI view (Perplexity). Skip gracefully if the key is unset or the
+  // call fails — the data brief still goes out.
+  let aiSection = ''
+  if (process.env.PERPLEXITY_API_KEY) {
+    try {
+      const analysis = await analyzePortfolio(buildContext(positions, quotes))
+      aiSection = `\n━━━━━━━━━━━━━━━━━━━━\n🧠 <b>AI view</b>\n${escapeHtml(analysis)}`
+    } catch (err) {
+      console.error('AI section skipped:', err.message)
+    }
+  }
+
+  const fullMsg = msg + aiSection
+  const send = await sendTelegram(recipients, fullMsg)
 
   return json({
     ok: send.ok,
@@ -112,8 +126,9 @@ export default async function handler(req) {
     recipients: recipients.length,
     totalValue,
     marketState,
+    aiIncluded: !!aiSection,
     sendResults: send.results,
-    preview: msg,
+    preview: fullMsg,
   })
 }
 

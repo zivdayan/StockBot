@@ -25,9 +25,18 @@ jobs:
         run: npm run build
 
       - name: Set Netlify env vars
+        env:
+          PPLX: ${{ secrets.PERPLEXITY_API_KEY }}
         run: |
           npx netlify-cli env:set TELEGRAM_BOT_TOKEN "${{ secrets.TELEGRAM_BOT_TOKEN }}"
           npx netlify-cli env:set ALERT_SECRET       "${{ secrets.ALERT_SECRET }}"
+          # Only push PERPLEXITY if the GH secret exists, so CI never blanks a
+          # value that was set directly in Netlify.
+          if [ -n "$PPLX" ]; then
+            npx netlify-cli env:set PERPLEXITY_API_KEY "$PPLX"
+          else
+            echo "PERPLEXITY_API_KEY secret not set in GitHub — leaving existing Netlify value untouched"
+          fi
 
       - name: Deploy to Netlify
         run: npx netlify-cli deploy --dir=dist --prod --message="Deploy from GitHub Actions"

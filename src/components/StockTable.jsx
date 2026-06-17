@@ -1,4 +1,8 @@
+import { useState } from 'react'
+import SymbolChart from './SymbolChart.jsx'
+
 export default function StockTable({ positions, prices, onDelete }) {
+  const [selected, setSelected] = useState(null)
   if (!positions.length) {
     return (
       <div className="table-wrapper">
@@ -72,7 +76,8 @@ export default function StockTable({ positions, prices, onDelete }) {
               <tr key={pos.ticker}>
                 <td>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span className="ticker">{pos.ticker}</span>
+                    <button className="ticker ticker-link" title={`View ${pos.ticker} chart`}
+                      onClick={() => setSelected(pos.ticker)}>{pos.ticker}</button>
                     {marketState && marketState !== 'REGULAR' && (
                       <span style={{
                         fontSize: 10, padding: '2px 5px', borderRadius: 4,
@@ -130,6 +135,14 @@ export default function StockTable({ positions, prices, onDelete }) {
           </tfoot>
         </table>
       </div>
+
+      {selected && (
+        <SymbolChart
+          position={positions.find(p => p.ticker === selected)}
+          price={prices[selected]}
+          onClose={() => setSelected(null)}
+        />
+      )}
     </div>
   )
 }
