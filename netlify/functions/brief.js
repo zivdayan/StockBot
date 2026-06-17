@@ -10,7 +10,8 @@
  */
 import { getStore } from '@netlify/blobs'
 import { fetchQuotes } from '../lib/quotes.js'
-import { sendTelegram, escapeHtml } from '../lib/telegram.js'
+import { escapeHtml } from '../lib/telegram.js'
+import { notify } from '../lib/notify.js'
 import { buildContext, analyzePortfolio } from '../lib/ai.js'
 
 const STORE_NAME = 'stockbot'
@@ -130,10 +131,13 @@ export default async function handler(req) {
   }
 
   const fullMsg = msg + aiSection
-  const send = await sendTelegram(recipients, fullMsg)
+  const trigger = new URL(req.url).searchParams.get('source') === 'cron' ? 'cron' : 'manual'
+  const send = await notify({ kind: 'brief', trigger, text: fullMsg, recipients, settings })
 
   return json({
     ok: send.ok,
+    skipped: send.skipped || false,
+    reason: send.reason ?? null,
     error: send.error ?? null,
     recipients: recipients.length,
     totalValue,

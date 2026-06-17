@@ -9,7 +9,8 @@
  */
 import { getStore } from '@netlify/blobs'
 import { fetchQuotes } from '../lib/quotes.js'
-import { sendTelegram, escapeHtml } from '../lib/telegram.js'
+import { escapeHtml } from '../lib/telegram.js'
+import { notify } from '../lib/notify.js'
 import { buildContext, analyzePortfolio } from '../lib/ai.js'
 
 const STORE_NAME = 'stockbot'
@@ -49,11 +50,13 @@ export default async function handler(req) {
   }
 
   if (channel === 'telegram') {
-    const recipients = (settingsRaw ? JSON.parse(settingsRaw) : {}).telegramRecipients || []
+    const settings = settingsRaw ? JSON.parse(settingsRaw) : {}
+    const recipients = settings.telegramRecipients || []
+    const trigger = new URL(req.url).searchParams.get('source') === 'cron' ? 'cron' : 'manual'
     const stamp = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' })
     const msg = `🧠 <b>StockBot AI Brief</b> — ${stamp}\n━━━━━━━━━━━━━━━━━━━━\n${escapeHtml(analysis)}`
-    const send = await sendTelegram(recipients, msg)
-    return json({ ok: send.ok, error: send.error ?? null, recipients: recipients.length, sendResults: send.results, analysis })
+    const send = await notify({ kind: 'aiBrief', trigger, text: msg, recipients, settings })
+    return json({ ok: send.ok, skipped: send.skipped || false, reason: send.reason ?? null, error: send.error ?? null, recipients: recipients.length, sendResults: send.results, analysis })
   }
 
   return json({ ok: true, analysis })

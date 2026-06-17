@@ -412,6 +412,32 @@ td.right { text-align: right; }
 }
 .ai-meta { font-size: 11px; color: var(--text-muted); margin-top: 10px; }
 
+/* ── Notifications ────────────────────────────────────────────── */
+.notif-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; }
+.toggle {
+  width: 42px; height: 24px; border-radius: 12px; border: none; cursor: pointer;
+  background: var(--border); position: relative; transition: background 0.15s; flex-shrink: 0;
+}
+.toggle.on { background: var(--green); }
+.toggle-knob {
+  position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; transition: transform 0.15s;
+}
+.toggle.on .toggle-knob { transform: translateX(18px); }
+
+.badge {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px;
+  padding: 2px 7px; border-radius: 5px; background: rgba(59,130,246,0.15); color: var(--blue);
+}
+.badge-dim { background: var(--surface2); color: var(--text-muted); }
+
+.notif-entry { border-top: 1px solid var(--border); padding: 12px 0; }
+.notif-entry-head { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.notif-preview {
+  margin-top: 8px; font-size: 12px; color: var(--text-muted); white-space: pre-wrap;
+  overflow: hidden; line-height: 1.5;
+}
+
 /* ── Mobile ───────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   .modal-overlay { padding: 0; }

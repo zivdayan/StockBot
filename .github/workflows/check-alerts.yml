@@ -12,7 +12,7 @@ jobs:
       - name: Trigger alert check
         run: |
           echo "Triggering StockBot alert check at $(date -u)"
-          RESPONSE=$(curl -sf -X POST "${{ secrets.NETLIFY_SITE_URL }}/api/check-alerts" \
+          RESPONSE=$(curl -sf -X POST "${{ secrets.NETLIFY_SITE_URL }}/api/check-alerts?source=cron" \
             -H "x-alert-token: ${{ secrets.ALERT_SECRET }}" \
             -H "Content-Type: application/json" \
             -w "\n%{http_code}")

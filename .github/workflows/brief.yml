@@ -24,7 +24,7 @@ jobs:
             exit 0
           fi
           echo "Sending StockBot pre-market brief at $(date -u)"
-          RESPONSE=$(curl -sf -X POST "${{ secrets.NETLIFY_SITE_URL }}/api/brief" \
+          RESPONSE=$(curl -sf -X POST "${{ secrets.NETLIFY_SITE_URL }}/api/brief?source=cron" \
             -H "Content-Type: application/json" \
             -w "\n%{http_code}")
           HTTP_CODE=$(echo "$RESPONSE" | tail -n1)

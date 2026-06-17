@@ -6,9 +6,11 @@ const KEY = 'settings'
 const DEFAULTS = {
   stockAlertThresholdPct: 2,
   portfolioAlertThresholdPct: 1,
-  telegramRecipients: [],   // [{ name: string, chatId: string }]
-  telegramContacts: [],     // address book: [{ name: string, chatId: string }]
+  telegramRecipients: [],   // [{ name, chatId }]
+  telegramContacts: [],     // address book
   dailySummaryHour: 17,
+  telegramMuted: false,     // master mute for all Telegram notifications
+  notifyTypes: { brief: true, aiBrief: true, alerts: true, dailySummary: true },
 }
 
 function cors(body, status = 200) {
@@ -19,6 +21,15 @@ function cors(body, status = 200) {
       'Access-Control-Allow-Origin': '*',
     },
   })
+}
+
+function migrate(saved) {
+  // Migrate legacy single telegramChatId → recipients list
+  if (saved.telegramChatId && !saved.telegramRecipients) {
+    saved.telegramRecipients = [{ name: 'Me', chatId: saved.telegramChatId }]
+    delete saved.telegramChatId
+  }
+  return saved
 }
 
 export default async function handler(req) {
@@ -36,33 +47,35 @@ export default async function handler(req) {
 
   if (req.method === 'GET') {
     const raw = await store.get(KEY)
-    const saved = raw ? JSON.parse(raw) : {}
-
-    // Migrate legacy single telegramChatId → recipients list
-    if (saved.telegramChatId && !saved.telegramRecipients) {
-      saved.telegramRecipients = [{ name: 'Me', chatId: saved.telegramChatId }]
-      delete saved.telegramChatId
-    }
-
+    const saved = migrate(raw ? JSON.parse(raw) : {})
     return cors({ ...DEFAULTS, ...saved })
   }
 
   if (req.method === 'POST') {
     const body = await req.json()
+    const raw = await store.get(KEY)
+    const current = { ...DEFAULTS, ...migrate(raw ? JSON.parse(raw) : {}) }
+
     const cleanList = (arr) =>
       Array.isArray(arr)
         ? arr.filter(r => r.chatId).map(r => ({ name: String(r.name || 'Unnamed'), chatId: String(r.chatId) }))
         : []
 
-    const settings = {
-      stockAlertThresholdPct: Number(body.stockAlertThresholdPct) || DEFAULTS.stockAlertThresholdPct,
-      portfolioAlertThresholdPct: Number(body.portfolioAlertThresholdPct) || DEFAULTS.portfolioAlertThresholdPct,
-      telegramRecipients: cleanList(body.telegramRecipients),
-      telegramContacts: cleanList(body.telegramContacts),
-      dailySummaryHour: Number(body.dailySummaryHour) ?? DEFAULTS.dailySummaryHour,
+    // Merge only the fields present in the body so different settings panels
+    // (Alert Settings / Notifications) don't clobber each other.
+    const next = { ...current }
+    if ('stockAlertThresholdPct' in body) next.stockAlertThresholdPct = Number(body.stockAlertThresholdPct) || DEFAULTS.stockAlertThresholdPct
+    if ('portfolioAlertThresholdPct' in body) next.portfolioAlertThresholdPct = Number(body.portfolioAlertThresholdPct) || DEFAULTS.portfolioAlertThresholdPct
+    if ('telegramRecipients' in body) next.telegramRecipients = cleanList(body.telegramRecipients)
+    if ('telegramContacts' in body) next.telegramContacts = cleanList(body.telegramContacts)
+    if ('dailySummaryHour' in body) next.dailySummaryHour = Number(body.dailySummaryHour) ?? DEFAULTS.dailySummaryHour
+    if ('telegramMuted' in body) next.telegramMuted = !!body.telegramMuted
+    if ('notifyTypes' in body && body.notifyTypes && typeof body.notifyTypes === 'object') {
+      next.notifyTypes = { ...DEFAULTS.notifyTypes, ...current.notifyTypes, ...body.notifyTypes }
     }
-    await store.set(KEY, JSON.stringify(settings))
-    return cors({ ok: true, settings })
+
+    await store.set(KEY, JSON.stringify(next))
+    return cors({ ok: true, settings: next })
   }
 
   return cors({ error: 'Method not allowed' }, 405)

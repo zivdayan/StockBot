@@ -45,3 +45,7 @@ export const getHistory = (ticker, range = '1Y') =>
 // AI portfolio analysis (Perplexity). channel 'web' returns { analysis }.
 export const getAiBrief = () =>
   request('/ai-brief', { method: 'POST', body: JSON.stringify({ channel: 'web' }) })
+
+// Notification log
+export const getNotifications = () => request('/notifications')
+export const clearNotifications = () => request('/notifications', { method: 'DELETE' })

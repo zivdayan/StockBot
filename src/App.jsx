@@ -5,6 +5,7 @@ import AddPositionForm from './components/AddPositionForm.jsx'
 import AlertSettings from './components/AlertSettings.jsx'
 import ImportPortfolio from './components/ImportPortfolio.jsx'
 import AiBrief from './components/AiBrief.jsx'
+import Notifications from './components/Notifications.jsx'
 
 const REFRESH_INTERVAL = 30_000 // 30 seconds
 
@@ -13,6 +14,7 @@ const TABS = [
   { id: 'portfolio', label: '➕ Manage Portfolio' },
   { id: 'import', label: '📥 Import' },
   { id: 'settings', label: '⚙️ Alert Settings' },
+  { id: 'notifications', label: '🔔 Notifications' },
 ]
 
 export default function App() {
@@ -128,6 +130,8 @@ export default function App() {
       )}
 
       {tab === 'settings' && <AlertSettings />}
+
+      {tab === 'notifications' && <Notifications />}
     </>
   )
 }

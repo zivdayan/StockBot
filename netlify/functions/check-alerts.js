@@ -1,6 +1,6 @@
 import { getStore } from '@netlify/blobs'
 import { fetchQuotes } from '../lib/quotes.js'
-import { sendTelegram } from '../lib/telegram.js'
+import { notify } from '../lib/notify.js'
 
 const STORE_NAME = 'stockbot'
 
@@ -30,6 +30,8 @@ export default async function handler(req) {
   if (secret && provided !== secret) {
     return json({ error: 'Unauthorized' }, 401)
   }
+
+  const trigger = new URL(req.url).searchParams.get('source') === 'cron' ? 'cron' : 'manual'
 
   const store = getStore(STORE_NAME)
 
@@ -133,13 +135,13 @@ export default async function handler(req) {
       `Total value: ${usd(totalCurrent)}\n` +
       `Overall P&L: ${totalPnl >= 0 ? '+' : '-'}${usd(totalPnl)} (${pct(totalPnlPct)})`
 
-    sendResults.push({ kind: 'daily-summary', ...(await sendTelegram(recipients, summaryMsg)) })
+    sendResults.push({ kind: 'dailySummary', ...(await notify({ kind: 'dailySummary', trigger, text: summaryMsg, recipients, settings })) })
   }
 
   // Batched stock/portfolio alerts
   if (alerts.length) {
     const msg = `⚠️ <b>StockBot Alert</b>\n\n` + alerts.join('\n\n')
-    sendResults.push({ kind: 'alerts', ...(await sendTelegram(recipients, msg)) })
+    sendResults.push({ kind: 'alerts', ...(await notify({ kind: 'alerts', trigger, text: msg, recipients, settings })) })
   }
 
   // Save new snapshot

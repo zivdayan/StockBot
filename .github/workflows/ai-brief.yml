@@ -23,7 +23,7 @@ jobs:
             echo "Not 16:xx ET — skipping (other scheduled time will fire)."
             exit 0
           fi
-          RESPONSE=$(curl -sf -X POST "${{ secrets.NETLIFY_SITE_URL }}/api/ai-brief" \
+          RESPONSE=$(curl -sf -X POST "${{ secrets.NETLIFY_SITE_URL }}/api/ai-brief?source=cron" \
             -H "Content-Type: application/json" \
             -d '{"channel":"telegram"}' \
             -w "\n%{http_code}")
