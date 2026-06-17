@@ -81,29 +81,41 @@ export default async function handler(req) {
   // Biggest movers by absolute daily %
   const movers = rows.filter(r => !r.missing).sort((a, b) => Math.abs(b.dayPct) - Math.abs(a.dayPct)).slice(0, 3)
 
-  const stateLabel = { REGULAR: 'open', PRE: 'pre-market', POST: 'after-hours', CLOSED: 'closed' }[marketState] || marketState
+  const stateLabel = { REGULAR: '🟢 open', PRE: '🌅 pre-market', POST: '🌙 after-hours', CLOSED: '🔒 closed' }[marketState] || marketState
   const stamp = new Date().toLocaleString('en-US', {
     timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 
+  // Directional emoji helpers
+  const dot = (v) => (v > 0 ? '🟢' : v < 0 ? '🔴' : '⚪')
+  const dayEmoji = totalDayGL > 0 ? '📈' : totalDayGL < 0 ? '📉' : '➡️'
+  const totalPnlPct = totalInvested ? totalPnl / totalInvested * 100 : 0
+
   const posLines = rows.map(r =>
     r.missing
-      ? `  ${r.ticker.padEnd(5)} — price unavailable`
-      : `  ${r.ticker.padEnd(5)} ${String(r.shares).padStart(3)}sh  $${r.last.toFixed(2)}  ${pct(r.dayPct)}  P&L ${signed(r.unreal)}`
+      ? `  ⚠️ ${r.ticker.padEnd(5)} — price unavailable`
+      : `  ${dot(r.dayPct)} <b>${r.ticker.padEnd(5)}</b> ${String(r.shares).padStart(3)}sh  $${r.last.toFixed(2)}  ${pct(r.dayPct)}  P&L ${signed(r.unreal)}`
   )
 
-  const moverLines = movers.map(r => `  ${r.dayPct >= 0 ? '📈' : '📉'} ${r.ticker} ${pct(r.dayPct)}`)
+  const moverLines = movers.map(r => `  ${r.dayPct >= 0 ? '📈' : '📉'} <b>${r.ticker}</b> ${pct(r.dayPct)}`)
+
+  // Bold one-line takeaway
+  const dir = totalDayGL >= 0 ? 'up' : 'down'
+  const bottomLine =
+    `${dayEmoji} <b>Day: ${dir} ${usd(Math.abs(totalDayGL))} (${pct(dayPctTotal)})</b> · ` +
+    `overall ${totalPnl >= 0 ? '🟢' : '🔴'} <b>${signed(totalPnl)} (${pct(totalPnlPct)})</b>`
 
   const msg =
     `🌅 <b>StockBot Brief</b> — ${stamp} ET\n` +
     `Market: ${stateLabel}\n` +
     `━━━━━━━━━━━━━━━━━━━━\n` +
     `💼 Value: <b>${usd(totalValue)}</b>\n` +
-    `   Today: ${signed(totalDayGL)} (${pct(dayPctTotal)})\n` +
-    `   Overall P&L: ${signed(totalPnl)} (${pct(totalInvested ? totalPnl / totalInvested * 100 : 0)})\n` +
+    `   Today: ${dot(totalDayGL)} <b>${signed(totalDayGL)}</b> (${pct(dayPctTotal)})\n` +
+    `   Overall P&L: ${dot(totalPnl)} <b>${signed(totalPnl)}</b> (${pct(totalPnlPct)})\n` +
     `━━━━━━━━━━━━━━━━━━━━\n` +
     `📋 <b>Positions</b>\n${posLines.join('\n')}\n` +
-    (moverLines.length ? `━━━━━━━━━━━━━━━━━━━━\n🔀 <b>Top movers</b>\n${moverLines.join('\n')}` : '')
+    (moverLines.length ? `━━━━━━━━━━━━━━━━━━━━\n🔀 <b>Top movers</b>\n${moverLines.join('\n')}\n` : '') +
+    `━━━━━━━━━━━━━━━━━━━━\n${bottomLine}`
 
   // Append the AI view (Perplexity). Skip gracefully if the key is unset or the
   // call fails — the data brief still goes out.
