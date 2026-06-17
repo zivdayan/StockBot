@@ -97,24 +97,22 @@ GitHub Actions (hourly)
 - `change` and `changePercent` are derived: `price − previousClose`
 - **Does NOT return:** bid/ask, regularMarketOpen (those come from the `/v8/finance/quote` endpoint which is now blocked without a crumb)
 
-### Today G/L formula (matches broker via imported reference)
+### G/L formulas
 
-The broker's "Today Gain/Loss" uses a **per-lot reference**, not previous close or the day's open: shares bought *today* are measured from their **purchase price**, overnight holds from **previous close**, and positions added to mid-session are a **blend**. It can't be reconstructed from live prices alone.
+Everything is computed live from Yahoo prices against the imported `shares` and `avg_cost` — the import only stores those two fields per position.
 
-Instead it's captured at import time. `import-portfolio.js` derives **`today_ref = last − (todayGL / shares)`** per position from the broker export (the broker's own intraday basis — e.g. INTC = 121.31, stable across the session) and stamps `ref_date` with the US/Eastern trading day. The dashboard computes **Today G/L = (livePrice − today_ref) × qty** while `ref_date` is the current ET day, then falls back to `(livePrice − previousClose) × qty` (by then every share is an overnight hold, so prev close is the correct reference). Re-import the `.xls` each session to refresh `today_ref`. Residual vs the broker is just live-price-vs-snapshot timing (~$4 on the full portfolio).
+- **Today G/L** = `(currentPrice − previousClose) × qty` (the standard daily change). Between the close and the next open this shows the last completed session's move; it resets when the next session opens.
+- **Unrealized G/L** = `(currentPrice − avg_cost) × qty`.
 
-`prices.js` also returns `dayOpen` (regular-session open from the intraday series); it's currently unused by the dashboard but available.
+> **History:** an earlier version imported a per-position `today_ref` (the broker's lot-aware intraday basis) to match the broker's "Today Gain/Loss" to the penny. That was dropped — it required a daily re-import and added a column-mapping bug surface — in favour of the standard previous-close definition, which matches the broker exactly except on days with intraday purchases. `prices.js` still returns `dayOpen`/`regularMarketPrice`, currently unused by the dashboard.
 
 ---
 
 ## Netlify Blobs Schema (store: "stockbot")
 
 ```json
-// key: "portfolio"
-// today_ref/ref_date are set by import-portfolio.js (broker's intraday basis
-// for Today G/L, valid only on ref_date's ET trading day). Manually-added
-// positions omit them and fall back to previousClose.
-{ "positions": [{ "ticker": "AMZN", "shares": 6, "avg_cost": 246.10, "today_ref": 246.10, "ref_date": "2026-06-16" }] }
+// key: "portfolio" — only ticker/shares/avg_cost; all G/L is computed live.
+{ "positions": [{ "ticker": "AMZN", "shares": 6, "avg_cost": 246.10 }] }
 
 // key: "snapshot" (written by check-alerts after each run)
 {
@@ -148,7 +146,12 @@ File: `portfolio.XXXXXX.xls` (actually tab-separated text disguised as .xls)
 | Qty | `shares` |
 | Average Cost | `avg_cost` |
 
-Each record spans **several physical lines** (the broker splits the Last/Change cell across lines) and summary rows precede the `Symbol`/`Qty` header. The parser finds the header row, groups continuation lines back into one record per ticker, and reads fixed data columns (`[2]`Qty, `[7]`Cost, `[9]`Today G/L, Last from `[3]`). It also derives `today_ref` from the Today G/L column. The totals footer (Symbol empty) is skipped. `import-portfolio.js` and the client preview in `ImportPortfolio.jsx` share this logic.
+Meitav exports **two formats**, both handled by `import-portfolio.js` (and mirrored in `ImportPortfolio.jsx` for the preview):
+
+- **(A) Clean single-line `.xls`** — one row per position with a full header incl. `Average Cost`. Columns are mapped by header name.
+- **(B) Messy multi-line clipboard TSV** — records span several physical lines, an extra margin-flag column follows Symbol, and cost is just `Cost`. Header names don't align with data, so fixed columns are used (`[2]`Qty, `[7]`Cost).
+
+Only **Symbol / Qty / Average Cost** are extracted. The parser detects the format by whether the header contains "Average Cost", and **rejects any row whose `avg_cost` is not a positive price** — so a format mismatch fails loudly instead of corrupting the portfolio (this caused a real incident where "Day's Value" was misread as cost). The totals footer (empty Symbol) is skipped.
 
 ---
 
