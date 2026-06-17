@@ -37,14 +37,21 @@ export async function logNotification(entry) {
   }
 }
 
+const baseEntry = (kind, trigger, text) => ({
+  id: globalThis.crypto?.randomUUID?.() || String(Date.now() + Math.random()),
+  ts: new Date().toISOString(),
+  kind,
+  trigger,                         // 'manual' | 'cron'
+  text: String(text || '').slice(0, 4000),
+})
+
+// Log a skip without sending (used to gate before expensive work like an AI call).
+export async function logSkip({ kind, trigger = 'manual', reason }) {
+  await logNotification({ ...baseEntry(kind, trigger, ''), status: 'skipped', reason, recipients: [] })
+}
+
 export async function notify({ kind, trigger = 'manual', text, recipients = [], settings = {} }) {
-  const base = {
-    id: globalThis.crypto?.randomUUID?.() || String(Date.now() + Math.random()),
-    ts: new Date().toISOString(),
-    kind,
-    trigger,                       // 'manual' | 'cron'
-    text: String(text).slice(0, 4000),
-  }
+  const base = baseEntry(kind, trigger, text)
 
   const gate = isAllowed(settings, kind)
   if (!gate.allowed) {

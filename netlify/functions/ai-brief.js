@@ -10,7 +10,7 @@
 import { getStore } from '@netlify/blobs'
 import { fetchQuotes } from '../lib/quotes.js'
 import { escapeHtml } from '../lib/telegram.js'
-import { notify } from '../lib/notify.js'
+import { notify, isAllowed, logSkip } from '../lib/notify.js'
 import { buildContext, analyzePortfolio } from '../lib/ai.js'
 
 const STORE_NAME = 'stockbot'
@@ -41,6 +41,18 @@ export default async function handler(req) {
   const { positions = [] } = portfolioRaw ? JSON.parse(portfolioRaw) : {}
   if (!positions.length) return json({ ok: false, error: 'No positions to analyze.' })
 
+  const settings = settingsRaw ? JSON.parse(settingsRaw) : {}
+  const trigger = new URL(req.url).searchParams.get('source') === 'cron' ? 'cron' : 'manual'
+
+  // For Telegram, gate before the (paid, slow) Perplexity call when muted/disabled.
+  if (channel === 'telegram') {
+    const gate = isAllowed(settings, 'aiBrief')
+    if (!gate.allowed) {
+      await logSkip({ kind: 'aiBrief', trigger, reason: gate.reason })
+      return json({ ok: false, skipped: true, reason: gate.reason })
+    }
+  }
+
   let analysis
   try {
     const quotes = await fetchQuotes(positions.map(p => p.ticker))
@@ -50,9 +62,7 @@ export default async function handler(req) {
   }
 
   if (channel === 'telegram') {
-    const settings = settingsRaw ? JSON.parse(settingsRaw) : {}
     const recipients = settings.telegramRecipients || []
-    const trigger = new URL(req.url).searchParams.get('source') === 'cron' ? 'cron' : 'manual'
     const stamp = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' })
     const msg = `🧠 <b>StockBot AI Brief</b> — ${stamp}\n━━━━━━━━━━━━━━━━━━━━\n${escapeHtml(analysis)}`
     const send = await notify({ kind: 'aiBrief', trigger, text: msg, recipients, settings })

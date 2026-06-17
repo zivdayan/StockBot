@@ -11,7 +11,7 @@
 import { getStore } from '@netlify/blobs'
 import { fetchQuotes } from '../lib/quotes.js'
 import { escapeHtml } from '../lib/telegram.js'
-import { notify } from '../lib/notify.js'
+import { notify, isAllowed, logSkip } from '../lib/notify.js'
 import { buildContext, analyzePortfolio } from '../lib/ai.js'
 
 const STORE_NAME = 'stockbot'
@@ -50,6 +50,15 @@ export default async function handler(req) {
   const recipients = settings.telegramRecipients || []
 
   if (!positions.length) return json({ ok: false, error: 'No positions to brief on.' }, 200)
+
+  // Gate before any expensive work (quotes + AI) when muted or the brief type
+  // is disabled.
+  const trigger = new URL(req.url).searchParams.get('source') === 'cron' ? 'cron' : 'manual'
+  const gate = isAllowed(settings, 'brief')
+  if (!gate.allowed) {
+    await logSkip({ kind: 'brief', trigger, reason: gate.reason })
+    return json({ ok: false, skipped: true, reason: gate.reason })
+  }
 
   const quotes = await fetchQuotes(positions.map(p => p.ticker))
 
@@ -131,7 +140,6 @@ export default async function handler(req) {
   }
 
   const fullMsg = msg + aiSection
-  const trigger = new URL(req.url).searchParams.get('source') === 'cron' ? 'cron' : 'manual'
   const send = await notify({ kind: 'brief', trigger, text: fullMsg, recipients, settings })
 
   return json({
