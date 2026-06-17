@@ -19,7 +19,7 @@ export default async function handler(req) {
     return json({ error: 'TELEGRAM_BOT_TOKEN is not set on this Netlify site.' }, 500)
   }
 
-  const store = getStore(STORE_NAME)
+  const store = getStore({ name: STORE_NAME, consistency: 'strong' })
 
   // Load persisted chats
   const raw = await store.get(CHATS_KEY)

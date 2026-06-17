@@ -131,7 +131,7 @@ export default async function handler(req) {
     return cors({ error: err.message }, 422)
   }
 
-  const store = getStore(STORE_NAME)
+  const store = getStore({ name: STORE_NAME, consistency: 'strong' })
   let positions
 
   if (mode === 'merge') {

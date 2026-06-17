@@ -36,7 +36,7 @@ export default async function handler(req) {
 
   const channel = (await req.json().catch(() => ({})))?.channel || 'web'
 
-  const store = getStore(STORE_NAME)
+  const store = getStore({ name: STORE_NAME, consistency: 'strong' })
   const [portfolioRaw, settingsRaw] = await Promise.all([store.get('portfolio'), store.get('settings')])
   const { positions = [] } = portfolioRaw ? JSON.parse(portfolioRaw) : {}
   if (!positions.length) return json({ ok: false, error: 'No positions to analyze.' })

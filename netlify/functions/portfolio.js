@@ -24,7 +24,7 @@ export default async function handler(req) {
     })
   }
 
-  const store = getStore(STORE_NAME)
+  const store = getStore({ name: STORE_NAME, consistency: 'strong' })
 
   // GET — return current portfolio
   if (req.method === 'GET') {

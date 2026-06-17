@@ -26,7 +26,7 @@ export function isAllowed(settings, kind) {
 
 export async function logNotification(entry) {
   try {
-    const store = getStore(STORE)
+    const store = getStore({ name: STORE, consistency: 'strong' })
     const raw = await store.get(KEY)
     const data = raw ? JSON.parse(raw) : { entries: [] }
     data.entries.unshift(entry)

@@ -39,7 +39,7 @@ export default async function handler(req) {
   }
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405)
 
-  const store = getStore(STORE_NAME)
+  const store = getStore({ name: STORE_NAME, consistency: 'strong' })
   const [portfolioRaw, settingsRaw] = await Promise.all([
     store.get('portfolio'),
     store.get('settings'),

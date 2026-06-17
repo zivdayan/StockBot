@@ -25,7 +25,7 @@ export default async function handler(req) {
     })
   }
 
-  const store = getStore(STORE_NAME)
+  const store = getStore({ name: STORE_NAME, consistency: 'strong' })
 
   if (req.method === 'GET') {
     const raw = await store.get(KEY)
