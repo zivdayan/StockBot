@@ -20,23 +20,33 @@ const firstNum = (s) => {
   return m ? parseFloat(m[0].replace(/,/g, '')) : NaN
 }
 
+// Build a position. avg_cost MUST be a positive price — a cost basis can't be
+// zero/negative, so this also guards against a format mismatch silently writing
+// the wrong column into avg_cost. today_ref = last − (today's $ gain / shares).
+function makePosition(ticker, shares, avg_cost, last, todayGL) {
+  if (!TICKER_RE.test(ticker) || isNaN(shares) || isNaN(avg_cost) || avg_cost <= 0) return null
+  const pos = { ticker, shares, avg_cost }
+  if (!isNaN(todayGL) && !isNaN(last) && shares) {
+    pos.today_ref = Math.round((last - todayGL / shares) * 10000) / 10000
+  }
+  return pos
+}
+
 /**
- * Parses the broker positions export (HTML-clipboard TSV disguised as .xls).
+ * Parses a Meitav positions export. Handles BOTH formats the broker produces:
  *
- * Each position record begins on a line whose first tab-cell is a ticker
- * symbol. The broker splits multi-line cells (the Last/Change cell) across
- * physical lines, so continuation lines are concatenated back onto the record.
- * Header/summary rows above the table and the totals footer are ignored.
+ *   (A) Clean single-line TSV (the .xls download): one row per position with a
+ *       full header — Symbol, Description, Qty, Bid, Ask, Last, Change,
+ *       Day's Value, Average Cost, Gain, Profit/Loss, Value. Columns are mapped
+ *       by header name.
+ *   (B) Messy multi-line clipboard TSV: records span several physical lines, an
+ *       extra margin-flag column follows Symbol, cost header is just "Cost".
+ *       Header names don't align with data columns, so fixed positions are used:
+ *         [0]Symbol [1]flag [2]Qty [3]Last(+chg) [7]Cost [9]TodayG/L
  *
- * Fixed data-column layout (note the margin-flag column after Symbol):
- *   [0]Symbol [1]flag [2]Qty [3]Last(+chg) [4]Chg% [5]Bid [6]Ask
- *   [7]Cost [8]Day'sValue [9]TodayG/L [10]UnrealizedG/L [11]TipRanks
- *
- * Returns positions including `today_ref` — the broker's intraday cost basis
- * for the Today G/L column, derived as last − (todayGL / shares). This is the
- * per-position reference the broker measures "today's" gain from (purchase
- * price for shares bought today, prev close for overnight holds, a blend for
- * positions that were added to during the session).
+ * Both derive today_ref = last − (today's $ gain / shares) — the broker's
+ * intraday basis for its Today G/L column (purchase price for shares bought
+ * today, prev close for overnight holds, a blend for positions added intraday).
  */
 function parseTSV(text) {
   const lines = text.split('\n')
@@ -46,7 +56,39 @@ function parseTSV(text) {
   })
   if (headerIdx === -1) throw new Error('Could not find the Symbol/Qty header row in the export')
 
-  // Group physical lines back into one string per position record.
+  const header = lines[headerIdx].split('\t').map(h => h.trim().toLowerCase())
+  // "Average Cost" only appears in the clean single-line format; the multi-line
+  // format labels it just "Cost".
+  const positions = header.some(h => h.includes('average cost'))
+    ? parseClean(lines, headerIdx, header)
+    : parseMultiline(lines, headerIdx)
+
+  if (!positions.length) {
+    throw new Error('No valid positions found — unexpected export format (avg cost must be a positive price)')
+  }
+  return positions
+}
+
+// (A) Clean single-line format — map columns by header name.
+function parseClean(lines, headerIdx, header) {
+  const col = (...names) => header.findIndex(h => names.some(n => h === n || h.includes(n)))
+  const symIdx = col('symbol')
+  const qtyIdx = col('qty')
+  const avgIdx = col('average cost', 'avg cost')
+  const lastIdx = col('last')
+  const dayIdx = col("day's value", 'days value', 'today gain', "today's gain")  // today's $ gain/loss
+
+  const out = []
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const c = lines[i].split('\t').map(x => x.trim())
+    const p = makePosition((c[symIdx] || '').toUpperCase(), num(c[qtyIdx]), num(c[avgIdx]), num(c[lastIdx]), num(c[dayIdx]))
+    if (p) out.push(p)
+  }
+  return out
+}
+
+// (B) Messy multi-line clipboard format — reconstruct records, fixed columns.
+function parseMultiline(lines, headerIdx) {
   const records = []
   let cur = null
   for (let i = headerIdx + 1; i < lines.length; i++) {
@@ -60,27 +102,13 @@ function parseTSV(text) {
   }
   if (cur !== null) records.push(cur)
 
-  const positions = []
+  const out = []
   for (const rec of records) {
     const c = rec.split('\t')
-    const ticker = c[0].trim().toUpperCase()
-    const shares = num(c[2])
-    const avg_cost = num(c[7])
-    const todayGL = num(c[9])
-    const last = firstNum(c[3])
-
-    // Skip totals footer and any row without a valid ticker/qty/cost
-    if (!ticker || isNaN(shares) || isNaN(avg_cost)) continue
-
-    const pos = { ticker, shares, avg_cost }
-    if (!isNaN(todayGL) && !isNaN(last) && shares) {
-      pos.today_ref = Math.round((last - todayGL / shares) * 10000) / 10000
-    }
-    positions.push(pos)
+    const p = makePosition(c[0].trim().toUpperCase(), num(c[2]), num(c[7]), firstNum(c[3]), num(c[9]))
+    if (p) out.push(p)
   }
-
-  if (!positions.length) throw new Error('No valid positions found in file')
-  return positions
+  return out
 }
 
 export default async function handler(req) {

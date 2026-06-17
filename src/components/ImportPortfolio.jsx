@@ -172,6 +172,15 @@ const firstNum = (s) => {
   return m ? parseFloat(m[0].replace(/,/g, '')) : NaN
 }
 
+function makePosition(ticker, shares, avg_cost, last, todayGL) {
+  if (!TICKER_RE.test(ticker) || isNaN(shares) || isNaN(avg_cost) || avg_cost <= 0) return null
+  const pos = { ticker, shares, avg_cost }
+  if (!isNaN(todayGL) && !isNaN(last) && shares) {
+    pos.today_ref = Math.round((last - todayGL / shares) * 10000) / 10000
+  }
+  return pos
+}
+
 function parseTSV(text) {
   const lines = text.split('\n')
   const headerIdx = lines.findIndex(l => {
@@ -180,6 +189,34 @@ function parseTSV(text) {
   })
   if (headerIdx === -1) throw new Error('Could not find the Symbol/Qty header row in the export')
 
+  const header = lines[headerIdx].split('\t').map(h => h.trim().toLowerCase())
+  const positions = header.some(h => h.includes('average cost'))
+    ? parseClean(lines, headerIdx, header)
+    : parseMultiline(lines, headerIdx)
+
+  if (!positions.length) {
+    throw new Error('No valid positions found — unexpected export format (avg cost must be a positive price)')
+  }
+  return positions
+}
+
+// (A) Clean single-line .xls — map columns by header name.
+function parseClean(lines, headerIdx, header) {
+  const col = (...names) => header.findIndex(h => names.some(n => h === n || h.includes(n)))
+  const symIdx = col('symbol'), qtyIdx = col('qty')
+  const avgIdx = col('average cost', 'avg cost'), lastIdx = col('last')
+  const dayIdx = col("day's value", 'days value', 'today gain', "today's gain")
+  const out = []
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const c = lines[i].split('\t').map(x => x.trim())
+    const p = makePosition((c[symIdx] || '').toUpperCase(), num(c[qtyIdx]), num(c[avgIdx]), num(c[lastIdx]), num(c[dayIdx]))
+    if (p) out.push(p)
+  }
+  return out
+}
+
+// (B) Messy multi-line clipboard TSV — reconstruct records, fixed columns.
+function parseMultiline(lines, headerIdx) {
   const records = []
   let cur = null
   for (let i = headerIdx + 1; i < lines.length; i++) {
@@ -192,23 +229,11 @@ function parseTSV(text) {
     }
   }
   if (cur !== null) records.push(cur)
-
-  const positions = []
+  const out = []
   for (const rec of records) {
     const c = rec.split('\t')
-    const ticker = c[0].trim().toUpperCase()
-    const shares = num(c[2])
-    const avg_cost = num(c[7])
-    const todayGL = num(c[9])
-    const last = firstNum(c[3])
-    if (!ticker || isNaN(shares) || isNaN(avg_cost)) continue
-    const pos = { ticker, shares, avg_cost }
-    if (!isNaN(todayGL) && !isNaN(last) && shares) {
-      pos.today_ref = Math.round((last - todayGL / shares) * 10000) / 10000
-    }
-    positions.push(pos)
+    const p = makePosition(c[0].trim().toUpperCase(), num(c[2]), num(c[7]), firstNum(c[3]), num(c[9]))
+    if (p) out.push(p)
   }
-
-  if (!positions.length) throw new Error('No valid positions found in file')
-  return positions
+  return out
 }
