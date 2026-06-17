@@ -167,18 +167,10 @@ export default function ImportPortfolio({ onImported }) {
 // ── Parser (mirrors server-side logic in import-portfolio.js, for preview) ─────
 const TICKER_RE = /^[A-Z][A-Z.]{0,6}$/
 const num = (s) => (s == null ? NaN : parseFloat(String(s).replace(/[$,%\s]/g, '')))
-const firstNum = (s) => {
-  const m = String(s ?? '').match(/-?[\d,]+\.?\d*/)
-  return m ? parseFloat(m[0].replace(/,/g, '')) : NaN
-}
 
-function makePosition(ticker, shares, avg_cost, last, todayGL) {
+function makePosition(ticker, shares, avg_cost) {
   if (!TICKER_RE.test(ticker) || isNaN(shares) || isNaN(avg_cost) || avg_cost <= 0) return null
-  const pos = { ticker, shares, avg_cost }
-  if (!isNaN(todayGL) && !isNaN(last) && shares) {
-    pos.today_ref = Math.round((last - todayGL / shares) * 10000) / 10000
-  }
-  return pos
+  return { ticker, shares, avg_cost }
 }
 
 function parseTSV(text) {
@@ -204,12 +196,11 @@ function parseTSV(text) {
 function parseClean(lines, headerIdx, header) {
   const col = (...names) => header.findIndex(h => names.some(n => h === n || h.includes(n)))
   const symIdx = col('symbol'), qtyIdx = col('qty')
-  const avgIdx = col('average cost', 'avg cost'), lastIdx = col('last')
-  const dayIdx = col("day's value", 'days value', 'today gain', "today's gain")
+  const avgIdx = col('average cost', 'avg cost')
   const out = []
   for (let i = headerIdx + 1; i < lines.length; i++) {
     const c = lines[i].split('\t').map(x => x.trim())
-    const p = makePosition((c[symIdx] || '').toUpperCase(), num(c[qtyIdx]), num(c[avgIdx]), num(c[lastIdx]), num(c[dayIdx]))
+    const p = makePosition((c[symIdx] || '').toUpperCase(), num(c[qtyIdx]), num(c[avgIdx]))
     if (p) out.push(p)
   }
   return out
@@ -232,7 +223,7 @@ function parseMultiline(lines, headerIdx) {
   const out = []
   for (const rec of records) {
     const c = rec.split('\t')
-    const p = makePosition(c[0].trim().toUpperCase(), num(c[2]), num(c[7]), firstNum(c[3]), num(c[9]))
+    const p = makePosition(c[0].trim().toUpperCase(), num(c[2]), num(c[7]))
     if (p) out.push(p)
   }
   return out

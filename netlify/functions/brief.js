@@ -51,11 +51,6 @@ export default async function handler(req) {
 
   const quotes = await fetchQuotes(positions.map(p => p.ticker))
 
-  // Current ET trading day — today_ref (the broker's intraday basis) is only
-  // valid for the session it was imported in; otherwise day change is vs prev
-  // close. This keeps the brief's "today" consistent with the dashboard.
-  const etToday = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-
   let totalValue = 0, totalInvested = 0, totalDayGL = 0
   const rows = []
   let marketState = 'CLOSED'
@@ -67,9 +62,9 @@ export default async function handler(req) {
     if (q.marketState && q.marketState !== 'CLOSED') marketState = q.marketState
     if (last == null) { rows.push({ ticker: pos.ticker, missing: true }); continue }
 
-    const ref = (pos.today_ref != null && pos.ref_date === etToday) ? pos.today_ref : prevClose
+    // Today's move is measured from the previous close.
     const value = pos.shares * last
-    const dayGL = ref != null ? pos.shares * (last - ref) : 0
+    const dayGL = prevClose != null ? pos.shares * (last - prevClose) : 0
     const dayPct = prevClose ? ((last - prevClose) / prevClose) * 100 : 0
     const unreal = pos.shares * (last - pos.avg_cost)
 

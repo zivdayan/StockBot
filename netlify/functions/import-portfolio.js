@@ -15,38 +15,27 @@ function cors(body, status = 200) {
 
 const TICKER_RE = /^[A-Z][A-Z.]{0,6}$/
 const num = (s) => (s == null ? NaN : parseFloat(String(s).replace(/[$,%\s]/g, '')))
-const firstNum = (s) => {
-  const m = String(s ?? '').match(/-?[\d,]+\.?\d*/)
-  return m ? parseFloat(m[0].replace(/,/g, '')) : NaN
-}
 
-// Build a position. avg_cost MUST be a positive price — a cost basis can't be
-// zero/negative, so this also guards against a format mismatch silently writing
-// the wrong column into avg_cost. today_ref = last − (today's $ gain / shares).
-function makePosition(ticker, shares, avg_cost, last, todayGL) {
+// Build a position. We only need ticker, shares, and avg_cost — every G/L on the
+// dashboard is computed live from Yahoo prices. avg_cost MUST be a positive price
+// (a cost basis can't be zero/negative); this also guards against a format
+// mismatch silently writing the wrong column into avg_cost.
+function makePosition(ticker, shares, avg_cost) {
   if (!TICKER_RE.test(ticker) || isNaN(shares) || isNaN(avg_cost) || avg_cost <= 0) return null
-  const pos = { ticker, shares, avg_cost }
-  if (!isNaN(todayGL) && !isNaN(last) && shares) {
-    pos.today_ref = Math.round((last - todayGL / shares) * 10000) / 10000
-  }
-  return pos
+  return { ticker, shares, avg_cost }
 }
 
 /**
  * Parses a Meitav positions export. Handles BOTH formats the broker produces:
  *
  *   (A) Clean single-line TSV (the .xls download): one row per position with a
- *       full header — Symbol, Description, Qty, Bid, Ask, Last, Change,
- *       Day's Value, Average Cost, Gain, Profit/Loss, Value. Columns are mapped
- *       by header name.
+ *       full header incl. "Average Cost". Columns are mapped by header name.
  *   (B) Messy multi-line clipboard TSV: records span several physical lines, an
  *       extra margin-flag column follows Symbol, cost header is just "Cost".
- *       Header names don't align with data columns, so fixed positions are used:
- *         [0]Symbol [1]flag [2]Qty [3]Last(+chg) [7]Cost [9]TodayG/L
+ *       Header names don't align with data, so fixed positions are used:
+ *         [0]Symbol [1]flag [2]Qty [7]Cost
  *
- * Both derive today_ref = last − (today's $ gain / shares) — the broker's
- * intraday basis for its Today G/L column (purchase price for shares bought
- * today, prev close for overnight holds, a blend for positions added intraday).
+ * Only ticker / shares / avg_cost are extracted.
  */
 function parseTSV(text) {
   const lines = text.split('\n')
@@ -75,13 +64,11 @@ function parseClean(lines, headerIdx, header) {
   const symIdx = col('symbol')
   const qtyIdx = col('qty')
   const avgIdx = col('average cost', 'avg cost')
-  const lastIdx = col('last')
-  const dayIdx = col("day's value", 'days value', 'today gain', "today's gain")  // today's $ gain/loss
 
   const out = []
   for (let i = headerIdx + 1; i < lines.length; i++) {
     const c = lines[i].split('\t').map(x => x.trim())
-    const p = makePosition((c[symIdx] || '').toUpperCase(), num(c[qtyIdx]), num(c[avgIdx]), num(c[lastIdx]), num(c[dayIdx]))
+    const p = makePosition((c[symIdx] || '').toUpperCase(), num(c[qtyIdx]), num(c[avgIdx]))
     if (p) out.push(p)
   }
   return out
@@ -105,7 +92,7 @@ function parseMultiline(lines, headerIdx) {
   const out = []
   for (const rec of records) {
     const c = rec.split('\t')
-    const p = makePosition(c[0].trim().toUpperCase(), num(c[2]), num(c[7]), firstNum(c[3]), num(c[9]))
+    const p = makePosition(c[0].trim().toUpperCase(), num(c[2]), num(c[7]))
     if (p) out.push(p)
   }
   return out
@@ -143,12 +130,6 @@ export default async function handler(req) {
   } catch (err) {
     return cors({ error: err.message }, 422)
   }
-
-  // Stamp the trading day (US/Eastern) this snapshot was taken. today_ref is
-  // only valid for that session; after it, the dashboard falls back to
-  // previous close (by then every share is an overnight hold).
-  const refDate = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
-  for (const p of imported) if (p.today_ref != null) p.ref_date = refDate
 
   const store = getStore(STORE_NAME)
   let positions
