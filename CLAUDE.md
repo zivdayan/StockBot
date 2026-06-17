@@ -43,6 +43,7 @@ A personal stock portfolio tracker with real-time Yahoo Finance data, Telegram a
 ├── netlify/lib/                ← Shared modules bundled into functions
 │   ├── quotes.js               ← fetchQuotes() + fetchHistory() direct Yahoo chart fetch
 │   ├── telegram.js             ← sendTelegram() (HTML escape + 4096-char chunking)
+│   ├── notify.js               ← notify(): gate (mute/type) → send → log every notification
 │   └── ai.js                   ← buildContext() + analyzePortfolio() (Perplexity Sonar)
 ├── netlify/functions/          ← Serverless API (Netlify Functions v2)
 │   ├── portfolio.js            ← GET/POST/DELETE /api/portfolio (Blobs key: "portfolio")
@@ -51,7 +52,8 @@ A personal stock portfolio tracker with real-time Yahoo Finance data, Telegram a
 │   ├── check-alerts.js         ← POST /api/check-alerts (alert logic; regular-session prices)
 │   ├── brief.js                ← POST /api/brief (portfolio briefing + AI section → Telegram)
 │   ├── ai-brief.js             ← POST /api/ai-brief (Perplexity analysis; web JSON or Telegram)
-│   ├── settings.js             ← GET/POST /api/settings (thresholds, recipients)
+│   ├── settings.js             ← GET/POST /api/settings (MERGES on POST; mute + notifyTypes)
+│   ├── notifications.js        ← GET/DELETE /api/notifications (Telegram send log)
 │   ├── import-portfolio.js     ← POST /api/import-portfolio (parse broker TSV export)
 │   └── telegram-chats.js       ← GET /api/telegram-chats (live bot chat list from getUpdates)
 │
@@ -67,7 +69,8 @@ A personal stock portfolio tracker with real-time Yahoo Finance data, Telegram a
 │       ├── AiBrief.jsx         ← On-demand Perplexity AI brief panel
 │       ├── AddPositionForm.jsx ← Manual ticker/shares/cost entry
 │       ├── ImportPortfolio.jsx ← Drag-drop broker .xls import with preview
-│       └── AlertSettings.jsx  ← Thresholds + Telegram picker + Trigger Brief button
+│       ├── AlertSettings.jsx  ← Thresholds + Telegram picker + Trigger Brief button
+│       └── Notifications.jsx   ← Mute + per-type toggles + sent-notification log viewer
 └── public/
     └── favicon.svg
 ```
@@ -116,6 +119,8 @@ Everything is computed live from Yahoo prices against the imported `shares` and 
 
 ## Netlify Blobs Schema (store: "stockbot")
 
+> All reads use **`getStore({ name, consistency: 'strong' })`** — the default is *eventual* consistency, which caused stale read-after-write bugs (and an unsafe read-merge-write in settings). Keep new reads on strong consistency.
+
 ```json
 // key: "portfolio" — only ticker/shares/avg_cost; all G/L is computed live.
 { "positions": [{ "ticker": "AMZN", "shares": 6, "avg_cost": 246.10 }] }
@@ -128,17 +133,28 @@ Everything is computed live from Yahoo prices against the imported `shares` and 
   "dailySummarySentDate": "2026-06-16"   // prevents duplicate daily summaries
 }
 
-// key: "settings"
+// key: "settings"  (POST merges only provided fields)
 {
   "stockAlertThresholdPct": 2,
   "portfolioAlertThresholdPct": 1,
   "telegramRecipients": [{ "name": "Ziv", "chatId": "123456789" }],
-  "dailySummaryHour": 17
+  "dailySummaryHour": 17,
+  "telegramMuted": false,                                   // master mute
+  "notifyTypes": { "brief": true, "aiBrief": true, "alerts": true, "dailySummary": true }
 }
+
+// key: "notifications"  (Telegram send log, newest first, last 100)
+{ "entries": [{ "id": "...", "ts": "ISO", "kind": "brief|aiBrief|alerts|dailySummary",
+  "trigger": "manual|cron", "status": "sent|skipped|failed|partial",
+  "reason": "muted|type-disabled", "recipients": [{ "name", "chatId", "ok", "error" }], "text": "…" }] }
 
 // key: "telegram-chats" (persisted chat list from getUpdates)
 { "<chatId>": { "chatId": "...", "name": "...", "type": "private", "username": "..." } }
 ```
+
+## Notifications
+
+Every Telegram send goes through `lib/notify.js → notify({ kind, trigger, text, recipients, settings })`, which checks the **master mute** and the **per-type toggle** (`settings.notifyTypes[kind]`), sends via `sendTelegram` when allowed, and logs the outcome to Blobs(`notifications`). `brief.js` / `ai-brief.js` gate *before* fetching quotes / calling Perplexity. Crons pass `?source=cron` so each entry is tagged manual vs cron. Manage it all in the **🔔 Notifications** tab (toggles + log viewer).
 
 ---
 
