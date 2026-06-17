@@ -34,19 +34,23 @@ A personal stock portfolio tracker with real-time Yahoo Finance data, Telegram a
 ├── .github/workflows/
 │   ├── deploy.yml              ← CI: build → set env vars → deploy to Netlify
 │   ├── check-alerts.yml        ← Hourly cron: POST /api/check-alerts
-│   └── brief.yml               ← Pre-market cron (~07:30 ET): POST /api/brief
+│   ├── brief.yml               ← Pre-market cron (~07:30 ET): POST /api/brief
+│   └── ai-brief.yml            ← Daily post-close cron (~16:30 ET): POST /api/ai-brief
 ├── netlify.toml                ← Build config + /api/* redirect to functions
 ├── vite.config.js
 ├── package.json                ← No yahoo-finance2 dep (uses direct fetch)
 │
 ├── netlify/lib/                ← Shared modules bundled into functions
-│   ├── quotes.js               ← fetchQuotes() direct Yahoo chart fetch (after-hours aware)
-│   └── telegram.js             ← sendTelegram() returns per-recipient delivery results
+│   ├── quotes.js               ← fetchQuotes() + fetchHistory() direct Yahoo chart fetch
+│   ├── telegram.js             ← sendTelegram() (HTML escape + 4096-char chunking)
+│   └── ai.js                   ← buildContext() + analyzePortfolio() (Perplexity Sonar)
 ├── netlify/functions/          ← Serverless API (Netlify Functions v2)
 │   ├── portfolio.js            ← GET/POST/DELETE /api/portfolio (Blobs key: "portfolio")
 │   ├── prices.js               ← GET /api/prices?tickers=... (wraps lib/quotes.js)
+│   ├── history.js              ← GET /api/history?ticker=&range= (per-symbol chart data)
 │   ├── check-alerts.js         ← POST /api/check-alerts (alert logic; regular-session prices)
-│   ├── brief.js                ← POST /api/brief (instant portfolio briefing → Telegram)
+│   ├── brief.js                ← POST /api/brief (portfolio briefing + AI section → Telegram)
+│   ├── ai-brief.js             ← POST /api/ai-brief (Perplexity analysis; web JSON or Telegram)
 │   ├── settings.js             ← GET/POST /api/settings (thresholds, recipients)
 │   ├── import-portfolio.js     ← POST /api/import-portfolio (parse broker TSV export)
 │   └── telegram-chats.js       ← GET /api/telegram-chats (live bot chat list from getUpdates)
@@ -58,10 +62,12 @@ A personal stock portfolio tracker with real-time Yahoo Finance data, Telegram a
 │   ├── api/
 │   │   └── client.js           ← Fetch wrappers for all /api/* endpoints
 │   └── components/
-│       ├── StockTable.jsx      ← Dashboard table (broker-style columns + totals footer)
+│       ├── StockTable.jsx      ← Dashboard table; click a ticker → SymbolChart
+│       ├── SymbolChart.jsx     ← Recharts price-history modal + avg-cost line (mobile sheet)
+│       ├── AiBrief.jsx         ← On-demand Perplexity AI brief panel
 │       ├── AddPositionForm.jsx ← Manual ticker/shares/cost entry
 │       ├── ImportPortfolio.jsx ← Drag-drop broker .xls import with preview
-│       └── AlertSettings.jsx  ← Thresholds + live Telegram chat list picker
+│       └── AlertSettings.jsx  ← Thresholds + Telegram picker + Trigger Brief button
 └── public/
     └── favicon.svg
 ```
@@ -177,6 +183,7 @@ Alerts (`POST /api/check-alerts`) are sent to all `telegramRecipients`, authenti
 |----------|--------|
 | `TELEGRAM_BOT_TOKEN` | @BotFather |
 | `ALERT_SECRET` | Random hex, shared with GitHub Actions |
+| `PERPLEXITY_API_KEY` | Perplexity Sonar API (AI brief). Set directly in Netlify env; `deploy.yml` only pushes it when the matching GitHub secret exists, so CI won't blank it. |
 
 ### GitHub Actions Secrets
 | Secret | Purpose |
@@ -186,6 +193,7 @@ Alerts (`POST /api/check-alerts`) are sent to all `telegramRecipients`, authenti
 | `NETLIFY_SITE_URL` | `https://stockbot-ziv.netlify.app` |
 | `ALERT_SECRET` | Auth for `/api/check-alerts` |
 | `TELEGRAM_BOT_TOKEN` | Pushed to Netlify env on deploy |
+| `PERPLEXITY_API_KEY` | (optional) AI brief — add to let CI manage it; currently set only in Netlify env |
 
 ### Local deploy credentials
 Stored at `~/.stockbot-deploy` (chmod 600, NOT in repo):
