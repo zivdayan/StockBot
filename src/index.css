@@ -392,7 +392,7 @@ td.right { text-align: right; }
   border-radius: 6px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer;
 }
 .range-btn.active { background: rgba(59, 130, 246, 0.15); border-color: var(--blue); color: var(--text); }
-.chart-area { flex: 1; min-height: 320px; height: 340px; }
+.chart-area { height: 340px; margin-top: 4px; }
 
 /* ── AI brief panel ───────────────────────────────────────────── */
 .ai-panel {
