@@ -32,6 +32,12 @@ function migrate(saved) {
   return saved
 }
 
+// Full settings with defaults applied. notifyTypes is DEEP-merged so newly
+// added notification types are always present even for older saved blobs.
+function withDefaults(saved) {
+  return { ...DEFAULTS, ...saved, notifyTypes: { ...DEFAULTS.notifyTypes, ...(saved.notifyTypes || {}) } }
+}
+
 export default async function handler(req) {
   if (req.method === 'OPTIONS') {
     return new Response(null, {
@@ -47,14 +53,13 @@ export default async function handler(req) {
 
   if (req.method === 'GET') {
     const raw = await store.get(KEY)
-    const saved = migrate(raw ? JSON.parse(raw) : {})
-    return cors({ ...DEFAULTS, ...saved })
+    return cors(withDefaults(migrate(raw ? JSON.parse(raw) : {})))
   }
 
   if (req.method === 'POST') {
     const body = await req.json()
     const raw = await store.get(KEY)
-    const current = { ...DEFAULTS, ...migrate(raw ? JSON.parse(raw) : {}) }
+    const current = withDefaults(migrate(raw ? JSON.parse(raw) : {}))
 
     const cleanList = (arr) =>
       Array.isArray(arr)
