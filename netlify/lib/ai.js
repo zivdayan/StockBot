@@ -34,6 +34,45 @@ export function buildContext(positions, quotes) {
   return `Holdings:\n${lines.join('\n')}\n\n${summary}`
 }
 
+// Markdown stats block shown at the START of the AI brief (snapshot, positions,
+// top movers) — mirrors the data brief. Renders in both the web panel and (via
+// mdToTelegramHtml) Telegram.
+export function buildStats(positions, quotes) {
+  let totalValue = 0, totalInvested = 0, totalDay = 0, marketState = 'CLOSED'
+  const rows = []
+  for (const p of positions) {
+    const q = quotes[p.ticker] || {}
+    const last = q.currentPrice
+    if (q.marketState && q.marketState !== 'CLOSED') marketState = q.marketState
+    if (last == null) { rows.push({ t: p.ticker, missing: true }); continue }
+    const prev = q.previousClose
+    const dayPct = prev ? ((last - prev) / prev) * 100 : 0
+    totalValue += p.shares * last
+    totalInvested += p.shares * p.avg_cost
+    totalDay += prev ? p.shares * (last - prev) : 0
+    rows.push({ t: p.ticker, shares: p.shares, last, dayPct, unreal: (last - p.avg_cost) * p.shares })
+  }
+  const totalPnl = totalValue - totalInvested
+  const dayPctTotal = (totalValue - totalDay) ? (totalDay / (totalValue - totalDay)) * 100 : 0
+  const dot = (v) => (v > 0 ? '🟢' : v < 0 ? '🔴' : '⚪')
+  const stateLabel = { REGULAR: '🟢 open', PRE: '🌅 pre-market', POST: '🌙 after-hours', CLOSED: '🔒 closed' }[marketState] || marketState
+
+  const posLines = rows.map(r => r.missing
+    ? `⚠️ **${r.t}** — price unavailable`
+    : `${dot(r.dayPct)} **${r.t}** ${r.shares}sh $${r.last.toFixed(2)} ${pct(r.dayPct)} · P&L ${signed(r.unreal)}`)
+  const movers = rows.filter(r => !r.missing).sort((a, b) => Math.abs(b.dayPct) - Math.abs(a.dayPct)).slice(0, 3)
+  const moverLines = movers.map(r => `${r.dayPct >= 0 ? '📈' : '📉'} **${r.t}** ${pct(r.dayPct)}`)
+
+  return (
+    `📊 **Snapshot** · ${stateLabel}\n` +
+    `💼 Value: **${usd(totalValue)}**\n` +
+    `Today: ${dot(totalDay)} **${signed(totalDay)}** (${pct(dayPctTotal)})\n` +
+    `Overall: ${dot(totalPnl)} **${signed(totalPnl)}** (${pct(totalInvested ? totalPnl / totalInvested * 100 : 0)})\n\n` +
+    `📋 **Positions**\n${posLines.join('\n')}\n\n` +
+    (moverLines.length ? `🔀 **Top movers**\n${moverLines.join('\n')}` : '')
+  )
+}
+
 const SYSTEM = `You are the user's personal equity research analyst. Each brief, RESEARCH what is actually happening with their specific holdings RIGHT NOW using current news, analyst commentary and market data — not generic portfolio theory.
 
 Cover fresh news & announcements per holding (earnings/guidance, analyst rating or price-target changes, product launches, M&A, regulatory/legal, management/insider moves), sector & macro TRENDS that concretely affect these names, and what they should worry about or act on.

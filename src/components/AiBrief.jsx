@@ -8,7 +8,7 @@ function inline(s) {
 
 // Render the brief's lightweight markdown into styled, sectioned blocks.
 function Markdown({ text }) {
-  const SECTION = /^(⚡|🔎|👀|📌|🚨|📊)/
+  const SECTION = /^(⚡|🔎|👀|📌|🚨|📊|📋|🔀)/
   const out = []
   text.split('\n').forEach((raw, i) => {
     const line = raw.trim()

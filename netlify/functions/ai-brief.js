@@ -10,7 +10,7 @@ import { getStore } from '@netlify/blobs'
 import { fetchQuotes } from '../lib/quotes.js'
 import { mdToTelegramHtml } from '../lib/telegram.js'
 import { notify, isAllowed, logSkip } from '../lib/notify.js'
-import { buildContext, analyzePortfolio } from '../lib/ai.js'
+import { buildContext, buildStats, analyzePortfolio } from '../lib/ai.js'
 
 const STORE_NAME = 'stockbot'
 const CACHE_KEY = 'ai-brief'
@@ -56,14 +56,17 @@ export default async function handler(req) {
     return json({ ok: false, skipped: true })
   }
 
-  // Generate once.
-  let analysis
+  // Generate once. Reuse the same quotes for the stats block (no extra fetch).
+  let content
   try {
     const quotes = await fetchQuotes(positions.map(p => p.ticker))
-    analysis = await analyzePortfolio(buildContext(positions, quotes))
+    const stats = buildStats(positions, quotes)
+    const analysis = await analyzePortfolio(buildContext(positions, quotes))
+    content = `${stats}\n\n${analysis}`   // technical snapshot first, then AI analysis
   } catch (err) {
     return json({ ok: false, error: err.message }, 502)
   }
+  const analysis = content
   const generatedAt = new Date().toISOString()
 
   // Cache for the web panel.
