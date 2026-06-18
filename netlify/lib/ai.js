@@ -45,13 +45,14 @@ Structure your answer EXACTLY like this, in markdown:
 (3-5 bullets, MOST CRITICAL FIRST: breaking news, big moves, real risks or decisions)
 
 🔎 **Details**
-**<TICKER or topic>** — <2-4 sentences expanding the relevant highlight with specifics, dates and numbers>
-(one block per highlight that needs expansion)
+**<TICKER or topic>** — <2-3 sentences expanding the relevant highlight with specifics, dates and numbers>
+(expand ONLY the top 3-4 highlights — one short block each, not every holding)
 
 👀 **On the radar**
 - <next dated catalyst: earnings date, Fed/CPI, product event>
 
 Rules:
+- ALWAYS finish with the "👀 On the radar" section — keep Details tight so you reach it.
 - Each highlight's bold lead phrase must capture the point on its own (skimmable).
 - Lead with the single most important NEW development.
 - Reference holdings by ticker; attribute moves to real, recent causes.
@@ -69,7 +70,7 @@ export async function analyzePortfolio(context) {
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 750,
+      max_tokens: 1100,
       search_recency_filter: 'week',   // bias toward fresh news
       messages: [
         { role: 'system', content: SYSTEM },
