@@ -42,9 +42,9 @@ export const triggerBrief = () => request('/brief', { method: 'POST' })
 export const getHistory = (ticker, range = '1Y') =>
   request(`/history?ticker=${encodeURIComponent(ticker)}&range=${encodeURIComponent(range)}`)
 
-// AI portfolio analysis (Perplexity). channel 'web' returns { analysis }.
-export const getAiBrief = () =>
-  request('/ai-brief', { method: 'POST', body: JSON.stringify({ channel: 'web' }) })
+// AI portfolio analysis (Perplexity).
+export const getCachedAiBrief = () => request('/ai-brief')                    // GET last cached
+export const generateAiBrief = () => request('/ai-brief', { method: 'POST' }) // generate + cache + Telegram
 
 // Notification log
 export const getNotifications = () => request('/notifications')

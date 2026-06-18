@@ -49,10 +49,11 @@ Structure your answer EXACTLY like this, in markdown:
 (expand ONLY the top 3-4 highlights — one short block each, not every holding)
 
 👀 **On the radar**
-- <next dated catalyst: earnings date, Fed/CPI, product event>
+- **<specific date or countdown>** — <catalyst: earnings, Fed/CPI, product event>
 
 Rules:
 - ALWAYS finish with the "👀 On the radar" section — keep Details tight so you reach it.
+- Every radar item MUST start with a concrete date when known — e.g. "**Jul 24**" or a countdown like "**in 3 days**" — researching the actual earnings/announcement dates. If a date is genuinely unknown, write "**date TBC**". Do not give an undated catalyst.
 - Each highlight's bold lead phrase must capture the point on its own (skimmable).
 - Lead with the single most important NEW development.
 - Reference holdings by ticker; attribute moves to real, recent causes.

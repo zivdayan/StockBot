@@ -430,6 +430,12 @@ td.right { text-align: right; }
 .ai-content .ai-para { margin: 6px 0; color: var(--text-muted); }
 .ai-content .ai-para strong { color: var(--text); }
 .ai-meta { font-size: 11px; color: var(--text-muted); margin-top: 14px; }
+.ai-lastline {
+  display: flex; align-items: center; gap: 8px; cursor: pointer;
+  margin-top: 12px; padding: 8px 10px; border-radius: 8px;
+  background: var(--surface2); font-size: 13px; color: var(--text);
+}
+.ai-lastline:hover { background: var(--border); }
 
 /* ── Notifications ────────────────────────────────────────────── */
 .notif-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 0; }
