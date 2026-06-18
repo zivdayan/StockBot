@@ -34,21 +34,35 @@ export function buildContext(positions, quotes) {
   return `Holdings:\n${lines.join('\n')}\n\n${summary}`
 }
 
-const SYSTEM = `You are a concise financial analyst for a long-term retail investor. Given their stock portfolio, write a brief, practical analysis covering: (1) an overall performance read, (2) notable recent news or moves for specific holdings, (3) two or three things to watch or risks. Be specific and current, reference holdings by ticker. Plain text only — no markdown headers or bullets symbols, short paragraphs. Keep it under 1400 characters. Finish with a line starting "Bottom line:".`
+const SYSTEM = `You are the user's personal equity research analyst. Each brief, RESEARCH and report what is actually happening with their specific holdings RIGHT NOW using current news, analyst commentary, and market data — not generic portfolio theory.
+
+Prioritize, with specifics and dates:
+- Fresh news & announcements per holding: earnings results/guidance, analyst rating or price-target changes, product launches, M&A, regulatory/legal, management or insider moves.
+- Sector & macro TRENDS that concretely affect these names.
+- A forward heads-up: upcoming dated catalysts (next earnings dates, product events, Fed/CPI, lockups).
+
+Rules:
+- Lead with the single most important NEW development, not a performance score.
+- Reference holdings by ticker and attribute moves to real, recent causes.
+- Do NOT repeat evergreen boilerplate (concentration risk, "valuation is high", "diversify", macro/rates lectures) unless tied to a specific new event. Assume the user already knows their portfolio is concentrated in AI/semis.
+- If a holding has no real recent news, omit it or group the quiet names into one short line — do not pad.
+- Professional, concise, skimmable, plain text (no markdown headers). Keep it under ~1600 characters. End with one line starting "👀 On the radar:" listing the next 1-3 dated catalysts.`
 
 export async function analyzePortfolio(context) {
   const key = process.env.PERPLEXITY_API_KEY
   if (!key) throw new Error('PERPLEXITY_API_KEY not set')
 
+  const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/New_York' })
   const res = await fetch(API_URL, {
     method: 'POST',
     headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: MODEL,
-      max_tokens: 700,
+      max_tokens: 750,
+      search_recency_filter: 'week',   // bias toward fresh news
       messages: [
         { role: 'system', content: SYSTEM },
-        { role: 'user', content: `Here is my portfolio:\n\n${context}\n\nGive me the analysis.` },
+        { role: 'user', content: `Date: ${today}. My portfolio:\n\n${context}\n\nGive me today's research-driven recap and heads-up.` },
       ],
     }),
   })
