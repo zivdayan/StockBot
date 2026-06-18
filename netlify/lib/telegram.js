@@ -7,6 +7,13 @@
 export const escapeHtml = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
+// Convert the model's lightweight markdown to Telegram HTML: **bold** → <b>,
+// leading "- "/"* " bullets → "• ". (Escape first so content is HTML-safe.)
+export const mdToTelegramHtml = (md) =>
+  escapeHtml(md)
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/^[ \t]*[-*]\s+/gm, '• ')
+
 const TG_LIMIT = 4096
 
 // Split a long message into <=4096-char chunks, preferring newline boundaries.

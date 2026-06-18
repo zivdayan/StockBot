@@ -9,7 +9,7 @@
  */
 import { getStore } from '@netlify/blobs'
 import { fetchQuotes } from '../lib/quotes.js'
-import { escapeHtml } from '../lib/telegram.js'
+import { mdToTelegramHtml } from '../lib/telegram.js'
 import { notify, isAllowed, logSkip } from '../lib/notify.js'
 import { buildContext, analyzePortfolio } from '../lib/ai.js'
 
@@ -64,7 +64,7 @@ export default async function handler(req) {
   if (channel === 'telegram') {
     const recipients = settings.telegramRecipients || []
     const stamp = new Date().toLocaleString('en-US', { timeZone: 'America/New_York', month: 'short', day: 'numeric' })
-    const msg = `🧠 <b>StockBot AI Brief</b> — ${stamp}\n━━━━━━━━━━━━━━━━━━━━\n${escapeHtml(analysis)}`
+    const msg = `🧠 <b>StockBot AI Brief</b> — ${stamp}\n━━━━━━━━━━━━━━━━━━━━\n${mdToTelegramHtml(analysis)}`
     const send = await notify({ kind: 'aiBrief', trigger, text: msg, recipients, settings })
     return json({ ok: send.ok, skipped: send.skipped || false, reason: send.reason ?? null, error: send.error ?? null, recipients: recipients.length, sendResults: send.results, analysis })
   }

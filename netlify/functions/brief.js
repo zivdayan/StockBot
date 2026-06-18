@@ -10,7 +10,7 @@
  */
 import { getStore } from '@netlify/blobs'
 import { fetchQuotes } from '../lib/quotes.js'
-import { escapeHtml } from '../lib/telegram.js'
+import { mdToTelegramHtml } from '../lib/telegram.js'
 import { notify, isAllowed, logSkip } from '../lib/notify.js'
 import { buildContext, analyzePortfolio } from '../lib/ai.js'
 
@@ -137,7 +137,7 @@ export default async function handler(req) {
   if (process.env.PERPLEXITY_API_KEY) {
     try {
       const analysis = await analyzePortfolio(buildContext(positions, quotes))
-      aiSection = `\n━━━━━━━━━━━━━━━━━━━━\n🧠 <b>AI view</b>\n${escapeHtml(analysis)}`
+      aiSection = `\n━━━━━━━━━━━━━━━━━━━━\n🧠 <b>AI view</b>\n${mdToTelegramHtml(analysis)}`
     } catch (err) {
       console.error('AI section skipped:', err.message)
     }

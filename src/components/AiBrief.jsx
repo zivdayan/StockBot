@@ -1,6 +1,29 @@
 import { useState } from 'react'
 import { getAiBrief } from '../api/client.js'
 
+// Inline **bold** → <strong>
+function inline(s) {
+  return s.split(/\*\*(.+?)\*\*/g).map((p, i) => (i % 2 ? <strong key={i}>{p}</strong> : p))
+}
+
+// Render the brief's lightweight markdown into styled, sectioned blocks.
+function Markdown({ text }) {
+  const SECTION = /^(⚡|🔎|👀|📌|🚨|📊)/
+  const out = []
+  text.split('\n').forEach((raw, i) => {
+    const line = raw.trim()
+    if (!line) { out.push(<div key={i} style={{ height: 6 }} />); return }
+    if (SECTION.test(line)) {
+      out.push(<div key={i} className="ai-section">{inline(line)}</div>)
+    } else if (/^[-*•]\s+/.test(line)) {
+      out.push(<div key={i} className="ai-bullet">{inline(line.replace(/^[-*•]\s+/, ''))}</div>)
+    } else {
+      out.push(<p key={i} className="ai-para">{inline(line)}</p>)
+    }
+  })
+  return <div className="ai-content">{out}</div>
+}
+
 export default function AiBrief() {
   const [loading, setLoading] = useState(false)
   const [analysis, setAnalysis] = useState(null)
@@ -40,7 +63,7 @@ export default function AiBrief() {
 
       {analysis && (
         <>
-          <div className="ai-content">{analysis}</div>
+          <Markdown text={analysis} />
           {at && <div className="ai-meta">Generated {at.toLocaleString()} · Perplexity Sonar</div>}
         </>
       )}
