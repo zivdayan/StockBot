@@ -129,6 +129,7 @@ export default function AlertSettings() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(false)
+  const [showGuide, setShowGuide] = useState(false)
   const [briefing, setBriefing] = useState(false)
   const [briefMsg, setBriefMsg] = useState(null)
 
@@ -269,10 +270,15 @@ export default function AlertSettings() {
         </form>
       </div>
 
-      {/* Setup guide */}
+      {/* Setup guide (collapsed by default — only needed for first-time setup) */}
       <div className="form-card" style={{ background: 'transparent', border: '1px solid var(--border)' }}>
-        <h2>Setup Guide</h2>
-        <div style={{ color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.8 }}>
+        <h2 onClick={() => setShowGuide(v => !v)}
+          style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{showGuide ? '▾' : '▸'}</span>
+          Setup Guide
+        </h2>
+        {showGuide && (
+        <div style={{ color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.8, marginTop: 14 }}>
           <p><strong style={{ color: 'var(--text)' }}>1. Create a bot</strong><br />
           Message <strong>@BotFather</strong> → /newbot → copy token → add as <code>TELEGRAM_BOT_TOKEN</code> GitHub secret</p>
           <br />
@@ -282,6 +288,7 @@ export default function AlertSettings() {
           <p><strong style={{ color: 'var(--text)' }}>3. Pick recipients</strong><br />
           Click <em>"Select from Telegram chats"</em> — your bot's chat list loads live. Toggle each person on/off, then Save.</p>
         </div>
+        )}
       </div>
     </div>
   )
