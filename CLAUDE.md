@@ -35,6 +35,7 @@ A personal stock portfolio tracker with real-time Yahoo Finance data, Telegram a
 │   ├── deploy.yml              ← CI: build → set env vars → deploy to Netlify
 │   ├── check-alerts.yml        ← Hourly cron: POST /api/check-alerts
 │   ├── brief.yml               ← Pre-market cron (~07:30 ET): POST /api/brief
+│   ├── morning-recap.yml       ← Daily 09:00 Israel: POST /api/brief?kind=morningRecap
 │   └── ai-brief.yml            ← Daily post-close cron (~16:30 ET): POST /api/ai-brief
 ├── netlify.toml                ← Build config + /api/* redirect to functions
 ├── vite.config.js
@@ -140,11 +141,12 @@ Everything is computed live from Yahoo prices against the imported `shares` and 
   "telegramRecipients": [{ "name": "Ziv", "chatId": "123456789" }],
   "dailySummaryHour": 17,
   "telegramMuted": false,                                   // master mute
-  "notifyTypes": { "brief": true, "aiBrief": true, "alerts": true, "dailySummary": true }
+  "notifyTypes": { "brief": true, "morningRecap": true, "aiBrief": true, "alerts": true, "dailySummary": true }
 }
 
 // key: "notifications"  (Telegram send log, newest first, last 100)
 { "entries": [{ "id": "...", "ts": "ISO", "kind": "brief|aiBrief|alerts|dailySummary",
+  // kind also includes "morningRecap"
   "trigger": "manual|cron", "status": "sent|skipped|failed|partial",
   "reason": "muted|type-disabled", "recipients": [{ "name", "chatId", "ok", "error" }], "text": "…" }] }
 
@@ -184,7 +186,8 @@ Only **Symbol / Qty / Average Cost** are extracted. The parser detects the forma
 | Per-stock alert | Any stock moves ±X% since last hourly snapshot |
 | Portfolio alert | Total value moves ±X% since last snapshot |
 | Daily P&L summary | Sent once at configured UTC hour (checks `dailySummarySentDate` to avoid dupes) |
-| Brief | On demand ("Trigger Brief" button) or pre-market cron — totals, positions, top movers |
+| Brief | On demand ("Trigger Brief" button) or pre-market cron — totals, positions, top movers, AI view |
+| Morning recap | Daily 09:00 Israel time — same composer as the brief (`?kind=morningRecap`), "☀️ Morning Recap" title, recaps the prior US session |
 
 Alerts (`POST /api/check-alerts`) are sent to all `telegramRecipients`, authenticated by `x-alert-token` matching `ALERT_SECRET`, and use **regular-session prices** (after-hours moves don't trigger alerts). The brief (`POST /api/brief`) is **unauthenticated** (only ever sends to the saved recipients) so the browser button can call it; it uses the **after-hours display price**. Both share `lib/telegram.js`, which returns per-recipient delivery results for verification.
 
