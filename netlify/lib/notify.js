@@ -15,7 +15,7 @@ const STORE = 'stockbot'
 const KEY = 'notifications'
 const MAX = 100
 
-export const NOTIFY_TYPE_DEFAULTS = { brief: true, aiBrief: true, alerts: true, dailySummary: true }
+export const NOTIFY_TYPE_DEFAULTS = { brief: true, morningRecap: true, aiBrief: true, alerts: true, dailySummary: true }
 
 export function isAllowed(settings, kind) {
   if (settings?.telegramMuted) return { allowed: false, reason: 'muted' }

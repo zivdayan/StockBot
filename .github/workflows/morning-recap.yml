@@ -1,0 +1,35 @@
+name: Morning Recap
+
+# Daily portfolio recap at 09:00 Asia/Jerusalem. GitHub cron is UTC-only with
+# no DST, so schedule both candidate times and let a Jerusalem-hour guard fire
+# only the right one:
+#   06:00 UTC = 09:00 IDT (summer)  / 08:00 IST (winter → skipped)
+#   07:00 UTC = 09:00 IST (winter)  / 10:00 IDT (summer → skipped)
+on:
+  schedule:
+    - cron: '0 6 * * *'
+    - cron: '0 7 * * *'
+  workflow_dispatch:           # manual trigger (bypasses the time guard)
+
+jobs:
+  morning_recap:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send morning recap at 09:00 Israel
+        run: |
+          IL_HOUR=$(TZ='Asia/Jerusalem' date +%H)
+          echo "Jerusalem hour is $IL_HOUR (event: ${{ github.event_name }})"
+          if [ "${{ github.event_name }}" = "schedule" ] && [ "$IL_HOUR" != "09" ]; then
+            echo "Not 09:xx Israel time — skipping (other scheduled time will fire)."
+            exit 0
+          fi
+          RESPONSE=$(curl -sf -X POST "${{ secrets.NETLIFY_SITE_URL }}/api/brief?source=cron&kind=morningRecap" \
+            -H "Content-Type: application/json" \
+            -w "\n%{http_code}")
+          HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+          echo "Response ($HTTP_CODE): $BODY"
+          if [ "$HTTP_CODE" != "200" ]; then
+            echo "Morning recap failed with HTTP $HTTP_CODE"
+            exit 1
+          fi

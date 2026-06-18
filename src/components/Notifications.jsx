@@ -3,11 +3,12 @@ import { getSettings, saveSettings, getNotifications, clearNotifications } from 
 
 const TYPES = [
   { key: 'brief', label: 'Pre-market / manual brief' },
+  { key: 'morningRecap', label: 'Morning recap (9am Israel)' },
   { key: 'aiBrief', label: 'Daily AI brief' },
   { key: 'alerts', label: 'Price / portfolio alerts' },
   { key: 'dailySummary', label: 'Daily P&L summary' },
 ]
-const KIND_LABEL = { brief: 'Brief', aiBrief: 'AI Brief', alerts: 'Alert', dailySummary: 'Summary' }
+const KIND_LABEL = { brief: 'Brief', morningRecap: 'Recap', aiBrief: 'AI Brief', alerts: 'Alert', dailySummary: 'Summary' }
 const STATUS = {
   sent: { label: 'Sent', color: 'var(--green)' },
   skipped: { label: 'Skipped', color: 'var(--text-muted)' },

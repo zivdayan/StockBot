@@ -10,7 +10,7 @@ const DEFAULTS = {
   telegramContacts: [],     // address book
   dailySummaryHour: 17,
   telegramMuted: false,     // master mute for all Telegram notifications
-  notifyTypes: { brief: true, aiBrief: true, alerts: true, dailySummary: true },
+  notifyTypes: { brief: true, morningRecap: true, aiBrief: true, alerts: true, dailySummary: true },
 }
 
 function cors(body, status = 200) {

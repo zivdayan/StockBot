@@ -51,12 +51,16 @@ export default async function handler(req) {
 
   if (!positions.length) return json({ ok: false, error: 'No positions to brief on.' }, 200)
 
-  // Gate before any expensive work (quotes + AI) when muted or the brief type
-  // is disabled.
-  const trigger = new URL(req.url).searchParams.get('source') === 'cron' ? 'cron' : 'manual'
-  const gate = isAllowed(settings, 'brief')
+  // kind ∈ { brief, morningRecap } — same composer, distinct title/toggle.
+  const url = new URL(req.url)
+  const trigger = url.searchParams.get('source') === 'cron' ? 'cron' : 'manual'
+  const kind = url.searchParams.get('kind') === 'morningRecap' ? 'morningRecap' : 'brief'
+  const isRecap = kind === 'morningRecap'
+
+  // Gate before any expensive work (quotes + AI) when muted or the type is disabled.
+  const gate = isAllowed(settings, kind)
   if (!gate.allowed) {
-    await logSkip({ kind: 'brief', trigger, reason: gate.reason })
+    await logSkip({ kind, trigger, reason: gate.reason })
     return json({ ok: false, skipped: true, reason: gate.reason })
   }
 
@@ -93,7 +97,7 @@ export default async function handler(req) {
 
   const stateLabel = { REGULAR: '🟢 open', PRE: '🌅 pre-market', POST: '🌙 after-hours', CLOSED: '🔒 closed' }[marketState] || marketState
   const stamp = new Date().toLocaleString('en-US', {
-    timeZone: 'America/New_York', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    timeZone: isRecap ? 'Asia/Jerusalem' : 'America/New_York', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 
   // Directional emoji helpers
@@ -116,7 +120,7 @@ export default async function handler(req) {
     `overall ${totalPnl >= 0 ? '🟢' : '🔴'} <b>${signed(totalPnl)} (${pct(totalPnlPct)})</b>`
 
   const msg =
-    `🌅 <b>StockBot Brief</b> — ${stamp} ET\n` +
+    `${isRecap ? '☀️ <b>Morning Recap</b>' : '🌅 <b>StockBot Brief</b>'} — ${stamp}${isRecap ? '' : ' ET'}\n` +
     `Market: ${stateLabel}\n` +
     `━━━━━━━━━━━━━━━━━━━━\n` +
     `💼 Value: <b>${usd(totalValue)}</b>\n` +
@@ -140,7 +144,7 @@ export default async function handler(req) {
   }
 
   const fullMsg = msg + aiSection
-  const send = await notify({ kind: 'brief', trigger, text: fullMsg, recipients, settings })
+  const send = await notify({ kind, trigger, text: fullMsg, recipients, settings })
 
   return json({
     ok: send.ok,
